@@ -6,28 +6,22 @@ function autocorr_increment(X,tauMax)
     nX = length(X)
     varX = var(X)
 
-    ####
-    [acf,dA] = deal(cell(1,ndata)); % Preallocate
-    [nX,varX] = deal(zeros(1,ndata));
-    
-    acf = myAutocorr(X,tauMax)
-    nX(nd) = numel(X); % Number of points
-    varX(nd) = var(X); % Variance
-    dA = (acf(2:end)-acf(1))*var(X); % Tidy up array
-    
-    %% Merge data
-    dAmat = cell2mat(dA); % Make into matrix
-    dA_full = (dAmat*nX')/sum(nX);
-    return dA_full
+    # Tidy up array
+    dA = (acf[2:end]-acf[1])*varX
+
+    return dA
 end
 function myAutocorr(X,lags)
-    Xdemean = X - mean(X);
-    nFFT = 2^(nextpow2(length(Xdemean))+1);
-    F = fft(Xdemean,nFFT);
-    F = F.*conj(F);
-    acf = ifft(F);
-    acf = acf(1:(lags+1));
-    acf = real(acf);
-    acf = acf./acf(1);
+    nX = length(X)
+    Xdemean = X .- mean(X)
+    nPower = nextpow(2, nX) + 1
+    nFFT = 2^nPower
+    Xpadded = zeros(nFFT)
+    Xpadded[1:nX] = Xdemean
+    F = fft(Xdemean)
+    F = F .* conj(F)
+    acf = ifft(F)
+    acf = acf[1:(lags+1)]
+    acf = acf ./ acf[1]
     return acf
 end

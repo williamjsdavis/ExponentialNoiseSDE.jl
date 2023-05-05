@@ -2,6 +2,10 @@ module ExponentialNoiseSDE
 
 greet() = print("Hello World!")
 
+#TODO: update code to use mean()
+using Statistics: var
+using FFTW: fft
+
 export Observation
 
 export ConditionalMoments, ConditionalMomentSettings
@@ -15,7 +19,7 @@ include("kernels.jl")
 include("KBR.jl")
 include("ConditionalMoments.jl")
 
-#include("autocorrelation.jl")
+include("autocorrelation.jl")
 include("ModelEstimate.jl")
 
 end # module ExponentialNoiseSDE
