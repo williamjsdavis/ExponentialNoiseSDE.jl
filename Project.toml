@@ -2,3 +2,11 @@ name = "ExponentialNoiseSDE"
 uuid = "e05663f3-40cf-472d-82cb-b388d7231c78"
 authors = ["williamjsdavis <williamjsdavis@berkeley.edu>"]
 version = "0.1.0"
+
+[deps]
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
