@@ -16,8 +16,8 @@ obs = Observation(
 end
 
 ## Conditional moment settings
-nTimeShiftSamplePoints = 10
-nEvalPoints = 5
+nTimeShiftSamplePoints = 60
+nEvalPoints = 20
 xEvalLims = (-1.0,1.0)
 kernel = "Epanechnikov"
 bandwidth = 0.1
@@ -41,8 +41,6 @@ end
 
 # Conditional moments
 conditionalMoments = build_moments(obs, momentSettings)
-@show size(conditionalMoments.moment1)
-@show dump(conditionalMoments)
 
 @testset "ConditionalMoments" begin
     @test size(conditionalMoments.moment1) == momentSize
