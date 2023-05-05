@@ -13,13 +13,34 @@ end
 # MATLAB equivalent: MomentClass.m
 #Note: Only first 2 moments
 struct ConditionalMoments
-    nCounts::Array{Int64,2}
+#    nCounts::Array{Int64,2}
     moment1::Array{Float64,2}
     moment2::Array{Float64,2}
-    evalPoints::Array{Float64,1}
+    xEvalPoints::Array{Float64,1}
     obervation::Observation
-    momentOptions
+    momentSettings
 end
 
 # MATLAB equivalent: buildMoments.m
-function 
+# Only Epan kernel so far
+function build_moments(observation::Observation, momentSettings::ConditionalMomentSettings)
+    xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints)
+
+    kernel = Epaneknikov()
+    moment1, moment2 = kbr_moments(
+        observation.X, 
+        momentSettings.timeShiftSamplePoints, 
+        xEvalPoints, 
+        momentSettings.bandwidth, 
+        kernel
+    )
+
+    xEvalPointsCollect = xEvalPoints |> collect
+    return ConditionalMoments(
+        moment1,
+        moment2,
+        xEvalPointsCollect,
+        observation,
+        momentSettings
+    )
+end

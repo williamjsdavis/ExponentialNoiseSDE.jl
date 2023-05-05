@@ -7,48 +7,43 @@ end
 
 
 ## Observations
+obs = Observation(
+    zeros(Float64,100),
+    0.1
+)
 @testset "Observation" begin
-    obs = Observation([0.0,0.0,0.0],0.1)
     @test obs.dt == 0.1
 end
 
 ## Conditional moment settings
-timeShiftSamplePoints = collect(1:10)
+nTimeShiftSamplePoints = 10
 nEvalPoints = 5
-evalLims = (-1.0,1.0)
+xEvalLims = (-1.0,1.0)
 kernel = "Epanechnikov"
 bandwidth = 0.1
-conditionalMomentSettings = ConditionalMomentSettings(
+
+# Variables/attributes
+timeShiftSamplePoints = collect(1:nTimeShiftSamplePoints)
+momentSize = (nTimeShiftSamplePoints, nEvalPoints)
+
+momentSettings = ConditionalMomentSettings(
     timeShiftSamplePoints,
     nEvalPoints,
-    evalLims,
+    xEvalLims,
     kernel,
     bandwidth,
 )
 
 @testset "ConditionalMomentSettings" begin
-    @test conditionalMomentSettings.bandwidth == 0.1
+    @test momentSettings.bandwidth == 0.1
 end
 
-#=
+
 # Conditional moments
-nSamplePoints = timeShiftSamplePoints |> length
-nCounts = zeros(Int64, nSamplePoints, nEvalPoints)
-moment1 = zeros(Float64, nSamplePoints, nEvalPoints)
-moment2 = zeros(Float64, nSamplePoints, nEvalPoints)
-evalPoints = 
-obervation
-momentOptions
-conditionalMomentSettings = ConditionalMomentSettings(
-    nCounts,
-    moment1
-    moment2
-    evalPoints
-    obervation
-    momentOptions
-)
+conditionalMoments = build_moments(obs, momentSettings)
+@show size(conditionalMoments.moment1)
+@show dump(conditionalMoments)
 
 @testset "ConditionalMoments" begin
-    @test obs.dt == 0.1
+    @test size(conditionalMoments.moment1) == momentSize
 end
-=#
