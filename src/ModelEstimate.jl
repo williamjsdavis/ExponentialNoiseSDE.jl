@@ -69,7 +69,7 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
     # Estimate drift and noise functions
     lambda1_1 = lambdaProperties.lambda1Star[1,:] # Array of lambda^(1)_1
     lambda2_1 = lambdaProperties.lambda2Star[1,:] # Array of lambda^(2)_1
-    fEstimate, gEstimate, fInitial, gInitial = fgIter(
+    fEstimate, gEstimate, fInitial, gInitial = fg_interate(
         lambda1_1,
         lambda2_1,
         thetaEst,
@@ -200,7 +200,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
     dA = autocorr_increment(X,nuMax)
 
     # First search
-    thetaStarInitial, rNuMatrix, _ = thetaBasisFunctionFit(
+    thetaStarInitial, rNuMatrix, _ = theta_basis_function_fit(
         dA,
         dt,
         nuMax,
@@ -218,7 +218,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
 
     # Second search
     newThetaMax = newNuMax*dt
-    thetaStarNew, _, lambdaStar = thetaBasisFunctionFit(
+    thetaStarNew, _, lambdaStar = theta_basis_function_fit(
         dA[1:newNuMax],
         dt,
         newNuMax,
@@ -237,7 +237,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
     )
 end
 
-function thetaBasisFunctionFit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
+function theta_basis_function_fit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
     # Objective function from matrix
     rNuMatrix = form_r_matrix(dt,nuMax)
     lambdaFunc = theta_c -> rNuMatrix(theta_c) \ dA
@@ -258,4 +258,88 @@ function thetaBasisFunctionFit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
     return thetaStar,rNuMatrix,lambdaStar
 end
 
-function form_r_matrix end
+function form_r_matrix(dt,nuMax)
+    # Basis functions
+    r1(tau,theta) = tau - theta*(1 - exp(-tau/theta))
+    r2(tau,theta) = tau.^2/2 - theta*r1(tau,theta)
+    r3(tau,theta) = tau.^3/6 - theta*r2(tau,theta)
+    rArray(tau,theta) = [r1(tau,theta),r2(tau,theta),r3(tau,theta)] # ?
+    
+    # Functions r matrix (reducing dependencies, new method)
+    nu = 1:nuMax
+    tau_nu = nu*dt
+    rNuMatrix = theta -> rArray(tau_nu,theta)
+    return rNuMatrix
+end
+
+function fg_interate(lambda1_1,lambda2_1,theta,Xcentre,betaConvergenceValue)
+    count_max = 2
+    
+    # Starting values
+    fInitial = lambda1_1
+    gInitial = sqrt(abs(lambda2_1))
+    fNew = fInitial
+    gNew = gInitial
+    
+    # Iterate until converged
+    count = 0
+    totalError = Inf
+    while (totalError > betaConvergenceValue) && (count < count_max)
+        count = count + 1
+        
+        fOld = fNew
+        gOld = gNew
+        
+        # Find updated values
+        [fNew,gNew] = fixed_point_iterate(
+            lambda1_1,
+            lambda2_1,
+            fOld,
+            gOld,
+            theta,
+            Xcentre
+        )
+        
+        totalError = sum((fNew .- fOld).^2) + sum((gNew .- gOld).^2)
+    end
+   return fNew, gNew, fInitial, gInitial 
+end
+
+function lambda_search_linear(moment1,moment2,rMatrix)
+    lambda1 = rMatrix \ moment1
+    lambda2 = rMatrix \ moment2
+    return lambda1, lambda2
+end
+
+function fixed_point_iterate(lambda1_1,lambda2_1,f,g,theta,xEvalPoints)
+    fGrad = fdiffNU(xEvalPoints,f)
+    gGrad = fdiffNU(xEvalPoints,g)
+
+    # Updated functions
+    fNew = lambda1_1 .- 0.5*g.*gGrad .- 
+                0.5*theta*(fGrad.*g.*gGrad .- f.*gGrad.^2)
+    gNew = sqrt(abs(lambda2_1 .- 
+                theta*(fGrad.*g.^2 .- f.*g.*gGrad)))
+    return fNew, gNew
+end
+
+#NOTE: Non-uniform finite-differences (can probably specialize & dispatch)
+function fdiffNU(x,F)
+    n = length(x)
+    m = n-2
+
+    h0 = x[2:n-1] - x[1:n-2] # Backwards steps
+    h1 = x[3:n] - x[2:n-1] # Forward steps
+    den = h0 .* h1 .* (h0 .+ h1) # Denominator
+    h0_2 = h0.^2 # Backwards steps squared
+    h1_2 = h1.^2 # Forward steps squared
+
+    # Boundaries
+    dFdx[n] = ((h0_2[m] + 2*h0[m]*h1[m]) * F(n) - 
+                (h0[m] + h1[m])^2 * F[n-1] + h1_2[m]*F[n-2]) / den[m]
+    dFdx[1] = (-(h1_2[1] + 2*h0[1]*h1[1] )* F[1] + 
+                (h0[1] + h1[1])^2 * F[2] - h0_2[1]*F[3]) / den[1]
+
+    # Main Body
+    dFdx[2:n-1] = (-h1_2.*F[1:n-2] + (h1_2 .- h0_2).*F[2:n-1] + h0_2.*F[3:n]) ./ den;
+end
