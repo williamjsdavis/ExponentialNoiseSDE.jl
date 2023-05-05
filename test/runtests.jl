@@ -38,10 +38,22 @@ momentSettings = ConditionalMomentSettings(
     @test momentSettings.bandwidth == 0.1
 end
 
-
 # Conditional moments
 conditionalMoments = build_moments(obs, momentSettings)
 
 @testset "ConditionalMoments" begin
     @test size(conditionalMoments.moment1) == momentSize
 end
+
+## Model estimates
+
+modelSettings1 = ModelEstimateSettings()
+modelSettings2 = ModelEstimateSettings(thetaConvergenceValue = 1E-5)
+
+@testset "ModelEstimateSettings" begin
+    @test modelSettings1.thetaConvergenceValue == 1E-2
+    @test modelSettings2.thetaConvergenceValue == 1E-5
+end
+
+
+
