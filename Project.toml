@@ -1,0 +1,4 @@
+name = "ExponentialNoiseSDE"
+uuid = "e05663f3-40cf-472d-82cb-b388d7231c78"
+authors = ["williamjsdavis <williamjsdavis@berkeley.edu>"]
+version = "0.1.0"
