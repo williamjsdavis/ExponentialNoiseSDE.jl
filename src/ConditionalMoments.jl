@@ -1,5 +1,6 @@
 # Conditional moments of observations
 
+# MATLAB equivalent: MomentOptionsClass.m
 #TODO: Add optimal bandwidth selection
 struct ConditionalMomentSettings
     timeShiftSamplePoints::Array{Int64,1}
@@ -9,6 +10,7 @@ struct ConditionalMomentSettings
     bandwidth::Float64
 end
 
+# MATLAB equivalent: MomentClass.m
 #Note: Only first 2 moments
 struct ConditionalMoments
     nCounts::Array{Int64,2}
@@ -19,3 +21,5 @@ struct ConditionalMoments
     momentOptions
 end
 
+# MATLAB equivalent: buildMoments.m
+function 

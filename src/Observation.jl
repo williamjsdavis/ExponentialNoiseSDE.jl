@@ -1,5 +1,6 @@
 # Time-series observations
 
+# MATLAB equivalent: ObservationClass.m
 #NOTE: Only do single observations first
 struct Observation
     X::Array{Float64,1}
