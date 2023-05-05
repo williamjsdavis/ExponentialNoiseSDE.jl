@@ -151,7 +151,7 @@ function estimate_theta(conditionalMoments::ConditionalMoments, fitOptions::Mode
     maximumLag = maximum(conditionalMoments.momentSettings.timeShiftSamplePoints)
     dt = conditionalMoments.obervation.dt
 
-
+    # This can be done better with multiple dispatch
     if fitSettings.fixThetaFlag
         # Fixed theta method
         thetaStar, thetaProperties = theta_fixed(
@@ -186,6 +186,48 @@ function theta_fixed(X,dt,nuMax,fitSettings)
     rNuMatrix = form_r_matrix(dt,nuMax) # Function: real -> matrix
     rMatrix = rNuMatrix(thetaStar) # Returns r[tau,theta] matrix
     lambdaStar = rMatrix \ dA
+
+    return ThetaProperties(
+        nuMax,
+        rMatrix,
+        dA,
+        lambdaStar
+    )
+end
+
+function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
+    # Autocorrelation (single data)
+    dA = autocorr_increment(X,nuMax)
+
+    # First search
+    thetaStarInitial, rNuMatrix, _ = thetaBasisFunctionFit(
+        dA,
+        dt,
+        nuMax,
+        thetaMax,
+        betaConv
+    )
+
+    # New maximum tau
+    newNuMax = ceil(sqrt(thetaStarInitial)/dt)
+
+    if newNuMax > nuMax
+        newNuMax = nuMax;
+        dA = autocorr_increment(X,newNuMax)
+    end
+
+    # Second search
+    newThetaMax = newNuMax*dt
+    thetaStarNew, _, lambdaStar = thetaBasisFunctionFit(
+        dA[1:newNuMax],
+        dt,
+        newNuMax,
+        newThetaMax,
+        betaConv
+    )
+
+    # R matrix
+    rMatrix = rNuMatrix(thetaStarNew) # Returns r[tau,theta] matrix
 
     return ThetaProperties(
         nuMax,
