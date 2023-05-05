@@ -7,14 +7,14 @@ function autocorr_increment(X,tauMax)
     varX = var(X)
 
     # Tidy up array
-    dA = (acf[2:end]-acf[1])*varX
+    dA = (acf[2:end] .- acf[1])*varX
 
     return dA
 end
 function myAutocorr(X,lags)
     nX = length(X)
     Xdemean = X .- mean(X)
-    nPower = nextpow(2, nX) + 1
+    nPower = Int64(log2(nextpow(2,nX))) + 1
     nFFT = 2^nPower
     Xpadded = zeros(nFFT)
     Xpadded[1:nX] = Xdemean
@@ -22,6 +22,7 @@ function myAutocorr(X,lags)
     F = F .* conj(F)
     acf = ifft(F)
     acf = acf[1:(lags+1)]
+    acf = real(acf)
     acf = acf ./ acf[1]
     return acf
 end

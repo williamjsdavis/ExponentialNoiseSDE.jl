@@ -3,16 +3,18 @@ module ExponentialNoiseSDE
 greet() = print("Hello World!")
 
 #TODO: update code to use mean()
-using FFTW: fft
+using FFTW: fft, ifft
 using NLopt: Opt, optimize
-using Statistics: var
+using Statistics: mean, var
 
 export Observation
 
-export ConditionalMoments, ConditionalMomentSettings
 export Epanechnikov
+export ConditionalMoments, ConditionalMomentSettings
 export build_moments
+
 export ModelEstimateSettings, ModelEstimate
+export estimate_model
 
 include("Observation.jl")
 

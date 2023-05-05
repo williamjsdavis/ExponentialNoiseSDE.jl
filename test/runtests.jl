@@ -47,13 +47,14 @@ end
 
 ## Model estimates
 
+# Settings
 modelSettings1 = ModelEstimateSettings()
 modelSettings2 = ModelEstimateSettings(thetaConvergenceValue = 1E-5)
-
 @testset "ModelEstimateSettings" begin
     @test modelSettings1.thetaConvergenceValue == 1E-2
     @test modelSettings2.thetaConvergenceValue == 1E-5
 end
 
-
+# Estimating
+estimate_model(conditionalMoments, modelSettings1)
 

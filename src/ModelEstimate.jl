@@ -123,8 +123,8 @@ function mean_fit_error(
         thetaProperties.rMatrix * lambdaProperties.lambda2Star
 
     # Fit summed mean absolute errors
-    meanAbsoluteErrorMoment1 = sum(abs(moment1Difference(:))) / length(moment1Difference)
-    meanAbsoluteErrorMoment2 = sum(abs(moment2Difference(:))) / length(moment2Difference)
+    meanAbsoluteErrorMoment1 = mean(abs(moment1Difference(:)))
+    meanAbsoluteErrorMoment2 = mean(abs(moment2Difference(:)))
     meanAbsoluteError = 0.5*(meanAbsoluteErrorMoment1 + meanAbsoluteErrorMoment2)
 
     if displayOutputFlag
@@ -146,7 +146,7 @@ function mean_fit_error(
     )
 end
 
-function estimate_theta(conditionalMoments::ConditionalMoments, fitOptions::ModelEstimateSettings)
+function estimate_theta(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings)
     
     maximumLag = maximum(conditionalMoments.momentSettings.timeShiftSamplePoints)
     dt = conditionalMoments.obervation.dt
@@ -158,7 +158,7 @@ function estimate_theta(conditionalMoments::ConditionalMoments, fitOptions::Mode
             conditionalMoments.obervation.X,
             dt,
             maximumLag,
-            fitOptions
+            fitSettings
         )
     else
         # Estimating theta
@@ -168,7 +168,7 @@ function estimate_theta(conditionalMoments::ConditionalMoments, fitOptions::Mode
             dt,
             maximumLag,
             maximumTheta,
-            fitOptions.thetaConvergence
+            fitSettings.thetaConvergenceValue
         )
     end
 
@@ -205,7 +205,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
         dt,
         nuMax,
         thetaMax,
-        betaConv
+        betaConvergenceValue
     )
 
     # New maximum tau
@@ -223,7 +223,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
         dt,
         newNuMax,
         newThetaMax,
-        betaConv
+        betaConvergenceValue
     )
 
     # R matrix
@@ -250,12 +250,12 @@ function theta_basis_function_fit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
     opt.lower_bounds = 0.0
     opt.upper_bounds = thetaMax
     opt.min_objective = objective_function
-    funcMin, xmin, retval = optimize(opt, [thetaMax])
+    funcMin, thetaStar, retval = optimize(opt, [thetaMax])
 
     # Best fit lambda vector
     lambdaStar = lambdaFunc(thetaStar);
 
-    return thetaStar,rNuMatrix,lambdaStar
+    return thetaStar, rNuMatrix, lambdaStar
 end
 
 function form_r_matrix(dt,nuMax)
@@ -291,7 +291,7 @@ function fg_interate(lambda1_1,lambda2_1,theta,Xcentre,betaConvergenceValue)
         gOld = gNew
         
         # Find updated values
-        [fNew,gNew] = fixed_point_iterate(
+        fNew, gNew = fixed_point_iterate(
             lambda1_1,
             lambda2_1,
             fOld,
