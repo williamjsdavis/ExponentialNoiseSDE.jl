@@ -3,8 +3,9 @@ module ExponentialNoiseSDE
 greet() = print("Hello World!")
 
 #TODO: update code to use mean()
-using Statistics: var
 using FFTW: fft
+using NLopt: Opt, optimize
+using Statistics: var
 
 export Observation
 

@@ -212,7 +212,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
     newNuMax = ceil(sqrt(thetaStarInitial)/dt)
 
     if newNuMax > nuMax
-        newNuMax = nuMax;
+        newNuMax = nuMax
         dA = autocorr_increment(X,newNuMax)
     end
 
@@ -237,3 +237,25 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
     )
 end
 
+function thetaBasisFunctionFit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
+    # Objective function from matrix
+    rNuMatrix = form_r_matrix(dt,nuMax)
+    lambdaFunc = theta_c -> rNuMatrix(theta_c) \ dA
+    funcValue = theta_c -> sum((dA .- (rNuMatrix(theta_c) * lambdaFunc(theta_c))).^2)
+
+    # Line search using golden section search and parabolic interpolation
+    # Original MATLAB: thetaStar = fminbnd(funcValue,0,thetaMax);
+    objective_function(x,g) = funcValue(x[1])
+    opt = Opt(:LD_MMA, 1)
+    opt.lower_bounds = 0.0
+    opt.upper_bounds = thetaMax
+    opt.min_objective = objective_function
+    funcMin, xmin, retval = optimize(opt, [thetaMax])
+
+    # Best fit lambda vector
+    lambdaStar = lambdaFunc(thetaStar);
+
+    return thetaStar,rNuMatrix,lambdaStar
+end
+
+function form_r_matrix end
