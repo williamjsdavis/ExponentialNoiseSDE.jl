@@ -59,5 +59,13 @@ modelSettings2 = ModelEstimateSettings(thetaConvergenceValue = 1E-5)
 end
 
 # Estimating
-estimate_model(conditionalMoments, modelSettings1)
+modelEstimate = estimate_model(conditionalMoments, modelSettings1)
+
+@testset "ModelEstimate" begin
+    @test size(modelEstimate.driftEstimate) == (nEvalPoints,)
+    @test size(modelEstimate.noiseEstimate) == (nEvalPoints,)
+    @test size(modelEstimate.driftInitial) == (nEvalPoints,)
+    @test size(modelEstimate.noiseInitial) == (nEvalPoints,)
+    @test modelEstimate.correlationEstimate > -1.0
+end
 
