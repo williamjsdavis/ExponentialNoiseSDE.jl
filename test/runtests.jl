@@ -1,4 +1,5 @@
 using ExponentialNoiseSDE
+using DelimitedFiles
 using Test
 
 @testset "First tests" begin
@@ -7,8 +8,10 @@ end
 
 
 ## Observations
+X_data = DelimitedFiles.readdlm("./data/exampleData.txt")[:]
+N_data = length(X_data)
 obs = Observation(
-    zeros(Float64,100),
+    X_data,
     0.1
 )
 @testset "Observation" begin
