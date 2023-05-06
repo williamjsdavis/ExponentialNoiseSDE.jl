@@ -29,6 +29,12 @@ struct ModelEstimateSettings
     end
 end
 
+struct ModelError
+    meanAbsoluteErrorMoment1
+    meanAbsoluteErrorMoment2
+    meanAbsoluteError
+end
+
 # MATLAB equivalent: SPmodelClass.m
 struct ModelEstimate
     correlationEstimate::Float64
@@ -36,7 +42,7 @@ struct ModelEstimate
     noiseEstimate::Array{Float64,1}
     driftInitial::Array{Float64,1}
     noiseInitial::Array{Float64,1}
-    meanAbsoluteError::Float64
+    modelError::ModelError
     conditionalMoments::ConditionalMoments
     thetaProperties
     lambdaProperties
@@ -60,32 +66,32 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
     thetaEst, thetaProperties = estimate_theta(conditionalMoments, fitSettings)
 
     # Estimate drift and noise properties
-    lambdaProperties = lambdaSearchLinear(
+    lambdaProperties = lambda_search_linear(
         conditionalMoments.moment1,
         conditionalMoments.moment2,
         thetaProperties.rMatrix
     )
     
     # Estimate drift and noise functions
-    lambda1_1 = lambdaProperties.lambda1Star[1,:] # Array of lambda^(1)_1
-    lambda2_1 = lambdaProperties.lambda2Star[1,:] # Array of lambda^(2)_1
+    lambda1_1 = lambdaProperties.lambda1Est[1,:] # Array of lambda^(1)_1
+    lambda2_1 = lambdaProperties.lambda2Est[1,:] # Array of lambda^(2)_1
     fEstimate, gEstimate, fInitial, gInitial = fg_interate(
         lambda1_1,
         lambda2_1,
         thetaEst,
         conditionalMoments.xEvalPoints,
-        fitSettings.functionConvergence
+        fitSettings.functionConvergenceValue
     )
 
     # Mean fit error
-    meanAbsoluteError = mean_fit_error(
+    modelError = mean_fit_error(
         conditionalMoments,
         thetaProperties,
         lambdaProperties,
         fitSettings.displayOutputFlag
     )
 
-
+    correlationEstimate = thetaEst
     driftEstimate = fEstimate
     noiseEstimate = gEstimate
     driftInitial = fInitial
@@ -96,18 +102,12 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
         noiseEstimate,
         driftInitial,
         noiseInitial,
-        meanAbsoluteError,
+        modelError,
         conditionalMoments,
         thetaProperties,
         lambdaProperties,
-        fitOptions
+        fitSettings
     )
-end
-
-struct ModelError
-    meanAbsoluteErrorMoment1
-    meanAbsoluteErrorMoment2
-    meanAbsoluteError
 end
 
 function mean_fit_error(
@@ -118,13 +118,13 @@ function mean_fit_error(
 
     # Fit differences
     moment1Difference = conditionalMoments.moment1 - 
-        thetaProperties.rMatrix * lambdaProperties.lambda1Star
+        thetaProperties.rMatrix * lambdaProperties.lambda1Est
     moment2Difference = conditionalMoments.moment2 - 
-        thetaProperties.rMatrix * lambdaProperties.lambda2Star
+        thetaProperties.rMatrix * lambdaProperties.lambda2Est
 
     # Fit summed mean absolute errors
-    meanAbsoluteErrorMoment1 = mean(abs(moment1Difference(:)))
-    meanAbsoluteErrorMoment2 = mean(abs(moment2Difference(:)))
+    meanAbsoluteErrorMoment1 = mean(abs.(moment1Difference))
+    meanAbsoluteErrorMoment2 = mean(abs.(moment2Difference))
     meanAbsoluteError = 0.5*(meanAbsoluteErrorMoment1 + meanAbsoluteErrorMoment2)
 
     if displayOutputFlag
@@ -154,7 +154,7 @@ function estimate_theta(conditionalMoments::ConditionalMoments, fitSettings::Mod
     # This can be done better with multiple dispatch
     if fitSettings.fixThetaFlag
         # Fixed theta method
-        thetaStar, thetaProperties = theta_fixed(
+        thetaEst, thetaProperties = theta_fixed(
             conditionalMoments.obervation.X,
             dt,
             maximumLag,
@@ -163,7 +163,7 @@ function estimate_theta(conditionalMoments::ConditionalMoments, fitSettings::Mod
     else
         # Estimating theta
         maximumTheta = maximumLag*dt
-        thetaStar, thetaProperties = theta_search(
+        thetaEst, thetaProperties = theta_search(
             conditionalMoments.obervation.X,
             dt,
             maximumLag,
@@ -177,17 +177,17 @@ end
 
 function theta_fixed(X,dt,nuMax,fitSettings)
     # Get set theta value
-    thetaStar = fitSettings.fixThetaValue
+    thetaEst = fitSettings.fixThetaValue
 
     # Autocorrelation (single data)
     dA = autocorr_increment(X,nuMax)
 
     # R matrix and lambda vector
     rNuMatrix = form_r_matrix(dt,nuMax) # Function: real -> matrix
-    rMatrix = rNuMatrix(thetaStar) # Returns r[tau,theta] matrix
+    rMatrix = rNuMatrix(thetaEst) # Returns r[tau,theta] matrix
     lambdaStar = rMatrix \ dA
 
-    return ThetaProperties(
+    return thetaEst, ThetaProperties(
         nuMax,
         rMatrix,
         dA,
@@ -200,7 +200,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
     dA = autocorr_increment(X,nuMax)
 
     # First search
-    thetaStarInitial, rNuMatrix, _ = theta_basis_function_fit(
+    thetaEstInitial, rNuMatrix, _ = theta_basis_function_fit(
         dA,
         dt,
         nuMax,
@@ -208,7 +208,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
         betaConvergenceValue
     )
     # New maximum tau
-    newNuMax = ceil(Int64, sqrt(thetaStarInitial)/dt)
+    newNuMax = ceil(Int64, sqrt(thetaEstInitial)/dt)
 
     if newNuMax > nuMax
         newNuMax = nuMax
@@ -217,7 +217,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
 
     # Second search
     newThetaMax = newNuMax*dt
-    thetaStarNew, _, lambdaStar = theta_basis_function_fit(
+    thetaEstNew, _, lambdaStar = theta_basis_function_fit(
         dA[1:newNuMax],
         dt,
         newNuMax,
@@ -226,9 +226,9 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
     )
 
     # R matrix
-    rMatrix = rNuMatrix(thetaStarNew) # Returns r[tau,theta] matrix
+    rMatrix = rNuMatrix(thetaEstNew) # Returns r[tau,theta] matrix
 
-    return ThetaProperties(
+    return thetaEstNew, ThetaProperties(
         nuMax,
         rMatrix,
         dA,
@@ -251,11 +251,11 @@ function theta_basis_function_fit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
     opt.upper_bounds = thetaMax
     opt.min_objective = objective_function
     funcMin, xMin, retval = optimize(opt, [thetaMax])
-    thetaStar = xMin[1]
+    thetaEst = xMin[1]
     # Best fit lambda vector
-    lambdaStar = lambdaFunc(thetaStar)
+    lambdaStar = lambdaFunc(thetaEst)
 
-    return thetaStar, rNuMatrix, lambdaStar
+    return thetaEst, rNuMatrix, lambdaStar
 end
 
 function form_r_matrix(dt,nuMax)
@@ -277,7 +277,7 @@ function fg_interate(lambda1_1,lambda2_1,theta,Xcentre,betaConvergenceValue)
     
     # Starting values
     fInitial = lambda1_1
-    gInitial = sqrt(abs(lambda2_1))
+    gInitial = sqrt.(abs.(lambda2_1))
     fNew = fInitial
     gNew = gInitial
     
@@ -308,7 +308,7 @@ end
 function lambda_search_linear(moment1,moment2,rMatrix)
     lambda1 = rMatrix \ moment1
     lambda2 = rMatrix \ moment2
-    return lambda1, lambda2
+    return LambdaProperties(lambda1, lambda2)
 end
 
 function fixed_point_iterate(lambda1_1,lambda2_1,f,g,theta,xEvalPoints)
@@ -318,7 +318,7 @@ function fixed_point_iterate(lambda1_1,lambda2_1,f,g,theta,xEvalPoints)
     # Updated functions
     fNew = lambda1_1 .- 0.5*g.*gGrad .- 
                 0.5*theta*(fGrad.*g.*gGrad .- f.*gGrad.^2)
-    gNew = sqrt(abs(lambda2_1 .- 
+    gNew = sqrt.(abs.(lambda2_1 .- 
                 theta*(fGrad.*g.^2 .- f.*g.*gGrad)))
     return fNew, gNew
 end
@@ -326,7 +326,7 @@ end
 #NOTE: Non-uniform finite-differences (can probably specialize & dispatch)
 function fdiffNU(x,F)
     n = length(x)
-    m = n-2
+    dFdx = zeros(n)
 
     h0 = x[2:n-1] - x[1:n-2] # Backwards steps
     h1 = x[3:n] - x[2:n-1] # Forward steps
@@ -335,11 +335,14 @@ function fdiffNU(x,F)
     h1_2 = h1.^2 # Forward steps squared
 
     # Boundaries
-    dFdx[n] = ((h0_2[m] + 2*h0[m]*h1[m]) * F(n) - 
+    m = n-2
+    dFdx[n] = ((h0_2[m] + 2*h0[m]*h1[m]) * F[n] - 
                 (h0[m] + h1[m])^2 * F[n-1] + h1_2[m]*F[n-2]) / den[m]
     dFdx[1] = (-(h1_2[1] + 2*h0[1]*h1[1] )* F[1] + 
                 (h0[1] + h1[1])^2 * F[2] - h0_2[1]*F[3]) / den[1]
 
     # Main Body
-    dFdx[2:n-1] = (-h1_2.*F[1:n-2] + (h1_2 .- h0_2).*F[2:n-1] + h0_2.*F[3:n]) ./ den;
+    dFdx[2:n-1] = (-h1_2.*F[1:n-2] + (h1_2 .- h0_2).*F[2:n-1] + h0_2.*F[3:n]) ./ den
+    
+    return dFdx
 end
