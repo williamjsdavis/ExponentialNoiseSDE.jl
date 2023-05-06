@@ -273,7 +273,7 @@ function form_r_matrix(dt,nuMax)
 end
 
 function fg_interate(lambda1_1,lambda2_1,theta,Xcentre,betaConvergenceValue)
-    count_max = 2
+    count_max = 1
     
     # Starting values
     fInitial = lambda1_1
