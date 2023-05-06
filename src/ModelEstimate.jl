@@ -207,9 +207,8 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
         thetaMax,
         betaConvergenceValue
     )
-
     # New maximum tau
-    newNuMax = ceil(sqrt(thetaStarInitial)/dt)
+    newNuMax = ceil(Int64, sqrt(thetaStarInitial)/dt)
 
     if newNuMax > nuMax
         newNuMax = nuMax
@@ -237,6 +236,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
     )
 end
 
+#NOTE: Make these anon functions into regular functions?
 function theta_basis_function_fit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
     # Objective function from matrix
     rNuMatrix = form_r_matrix(dt,nuMax)
@@ -246,14 +246,14 @@ function theta_basis_function_fit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
     # Line search using golden section search and parabolic interpolation
     # Original MATLAB: thetaStar = fminbnd(funcValue,0,thetaMax);
     objective_function(x,g) = funcValue(x[1])
-    opt = Opt(:LD_MMA, 1)
+    opt = Opt(:LN_COBYLA, 1)
     opt.lower_bounds = 0.0
     opt.upper_bounds = thetaMax
     opt.min_objective = objective_function
-    funcMin, thetaStar, retval = optimize(opt, [thetaMax])
-
+    funcMin, xMin, retval = optimize(opt, [thetaMax])
+    thetaStar = xMin[1]
     # Best fit lambda vector
-    lambdaStar = lambdaFunc(thetaStar);
+    lambdaStar = lambdaFunc(thetaStar)
 
     return thetaStar, rNuMatrix, lambdaStar
 end
@@ -268,7 +268,7 @@ function form_r_matrix(dt,nuMax)
     # Functions r matrix (reducing dependencies, new method)
     nu = 1:nuMax
     tau_nu = nu*dt
-    rNuMatrix = theta -> rArray(tau_nu,theta)
+    rNuMatrix = theta -> mapreduce(permutedims, vcat, rArray.(tau_nu,theta))
     return rNuMatrix
 end
 

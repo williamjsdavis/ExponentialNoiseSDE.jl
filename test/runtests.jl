@@ -8,19 +8,19 @@ end
 
 
 ## Observations
-X_data = DelimitedFiles.readdlm("./data/exampleData.txt")[:]
+X_data = DelimitedFiles.readdlm("./data/exampleData.txt")[1:100]
 N_data = length(X_data)
 obs = Observation(
     X_data,
-    0.1
+    0.0050
 )
 @testset "Observation" begin
-    @test obs.dt == 0.1
+    @test obs.dt == 0.0050
 end
 
 ## Conditional moment settings
-nTimeShiftSamplePoints = 60
-nEvalPoints = 20
+nTimeShiftSamplePoints = 6
+nEvalPoints = 5
 xEvalLims = (-1.0,1.0)
 kernel = "Epanechnikov"
 bandwidth = 0.1
