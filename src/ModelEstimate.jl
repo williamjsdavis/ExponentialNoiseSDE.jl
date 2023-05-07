@@ -201,7 +201,8 @@ function estimate_theta(conditionalMoments::ConditionalMoments, fitSettings::Mod
             dt,
             maximumLag,
             maximumTheta,
-            fitSettings.thetaConvergenceValue
+            fitSettings.thetaConvergenceValue,
+            fitSettings.displayOutputFlag
         )
     end
 
@@ -228,11 +229,9 @@ function theta_fixed(X,dt,nuMax,fitSettings)
     )
 end
 
-function theta_search(X,dt,nuMax,thetaMax,thetaConvergenceValue)
+function theta_search(X,dt,nuMax,thetaMax,thetaConvergenceValue,displayOutputFlag)
     # Autocorrelation (single data)
-    @show nuMax
     dA = autocorr_increment(X,nuMax)
-    #dA = load_precalculated_dA()
 
     # First search
     thetaEstInitial, rNuMatrix, _ = theta_basis_function_fit(
@@ -244,12 +243,12 @@ function theta_search(X,dt,nuMax,thetaMax,thetaConvergenceValue)
     )
     # New maximum tau
     newNuMax = ceil(Int64, sqrt(thetaEstInitial)/dt)
-    @show newNuMax
     if newNuMax > nuMax
-        println("Calculating new ACF")
+        if displayOutputFlag
+            println("Calculating new ACF")
+        end
         newNuMax = nuMax
         dA = autocorr_increment(X,newNuMax)
-        #dA = load_precalculated_second_dA()
     end
 
     # Second search
@@ -288,16 +287,10 @@ function theta_basis_function_fit(dA,dt,nuMax,thetaMax,thetaConvergenceValue)
     opt.upper_bounds = thetaMax
     opt.xtol_abs = 1E-12
     opt.min_objective = objective_function
-    @show funcMin, xMin, retval = optimize(opt, [thetaMax])
+    funcMin, xMin, retval = optimize(opt, [thetaMax])
     thetaEst = xMin[1]
     # Best fit lambda vector
-    @show lambdaStar = lambdaFunc(thetaEst)
-    
-    @show rNuMatrix(thetaEst)
-    @show lambdaFunc(thetaEst)
-    @show rNuMatrix(0.010259639889881)
-    @show lambdaFunc(0.010259639889881)
-    @show dA
+    lambdaStar = lambdaFunc(thetaEst)
 
     return thetaEst, rNuMatrix, lambdaStar
 end
@@ -390,7 +383,6 @@ function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::S
             gGrad,
             theta
         )
-        @show (count, fNew, gNew)
         totalError = sum((fNew .- fOld).^2) + sum((gNew .- gOld).^2)
     end
    return fNew, gNew, fInitial, gInitial 
@@ -432,45 +424,4 @@ function fdiffNU(x,F)
     dFdx[2:n-1] = (-h1_2.*F[1:n-2] + (h1_2 .- h0_2).*F[2:n-1] + h0_2.*F[3:n]) ./ den
     
     return dFdx
-end
-
-function load_precalculated_dA()
-    dA = [
-        -0.000582057549633207
-        -0.00200082119911433
-        -0.00391300658940873
-        -0.00611098179579842
-        -0.00846928666848296
-        -0.0109122835560818
-        -0.0133937924967669
-        -0.015882948452609
-        -0.018358366667826
-        -0.0208063744974986
-        -0.0232204816798446
-        -0.0255967317691245
-        -0.027936617102445
-        -0.0302447274405242
-        -0.0325229560133573
-    ]
-    return dA
-end
-function load_precalculated_second_dA()
-    dA = [
-        -0.000582057549633207
-        -0.00200082119911433
-        -0.00391300658940873
-        -0.00611098179579842
-        -0.00846928666848297
-        -0.0109122835560818
-        -0.0133937924967669
-        -0.0158829484526090
-        -0.0183583666678260
-        -0.0208063744974986
-        -0.0232204816798446
-        -0.0255967317691245
-        -0.0279366171024450
-        -0.0302447274405242
-        -0.0325229560133573
-    ]
-    return dA
 end
