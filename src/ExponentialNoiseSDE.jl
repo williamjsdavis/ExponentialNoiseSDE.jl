@@ -6,6 +6,7 @@ greet() = print("Hello World!")
 using FFTW: fft, ifft
 using NLopt: Opt, optimize
 using Statistics: mean, var
+using Random:rand
 
 export Observation
 
@@ -32,6 +33,9 @@ include("theta_estimation.jl")
 include("lambda_estimation.jl")
 include("function_estimation.jl")
 include("model_error.jl")
+
+include("Bootstrap.jl")
+
 include("default_settings.jl")
 
 end # module ExponentialNoiseSDE

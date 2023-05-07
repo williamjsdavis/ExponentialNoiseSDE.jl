@@ -42,3 +42,14 @@ function SmoothedFiniteDiff(;
     )
     end
 end
+
+# Bootstrapping
+function BootstrapSettings(;
+        blockLength = 500,
+        nSamples = 20
+    ) begin BootstrapSettings(
+        blockLength,
+        nSamples
+    )
+    end
+end

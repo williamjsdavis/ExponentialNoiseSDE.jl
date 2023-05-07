@@ -1,5 +1,8 @@
 # Utility and statistic functions
 
+# Conditional print
+verbose(cond::Bool,message::String) = cond ? println(message) : nothing
+
 # Moving average, inspired my MATLAB
 """
 M = movmean(X,n) returns an array of local k-point mean values, where each mean is calculated over a sliding window of length k across neighboring elements of A. 

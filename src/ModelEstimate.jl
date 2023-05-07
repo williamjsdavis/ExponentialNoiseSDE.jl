@@ -73,3 +73,13 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
         fitSettings
     )
 end
+
+# Other call args
+function estimate_model(observation,momentSettings,fitSettings)
+    # Calculate moments
+    conditionalMoments = build_moments(observation, momentSettings)
+    
+    # Estimate model
+    modelEstimate = estimate_model(conditionalMoments, fitSettings)
+    return modelEstimate
+end

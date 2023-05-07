@@ -143,7 +143,7 @@ end
 function estimate_large_model_unsmoothed()
     # Get settings
     momentSettings, _ = get_default_estimation_settings()
-    modelSettings = ModelEstimateSettings(
+    fitSettings = ModelEstimateSettings(
         functionIterateMethod = FiniteDiff()
     )
 
@@ -154,12 +154,8 @@ function estimate_large_model_unsmoothed()
         X_data,
         0.0050
     )
-    
-    # Conditional moments
-    conditionalMoments = build_moments(obs, momentSettings)
-    
-    ## Model estimates
-    modelEstimate = estimate_model(conditionalMoments, modelSettings)
 
+    # Do full estimate
+    modelEstimate = estimate_model(obs, momentSettings, fitSettings)
     return modelEstimate
 end
