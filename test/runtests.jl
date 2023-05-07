@@ -2,6 +2,7 @@ using ExponentialNoiseSDE
 using DelimitedFiles
 using Test
 include("test_utils.jl")
+include("validate_calculations.jl")
 
 ## Utilities and statistics
 test_utility_statistics()

@@ -26,6 +26,12 @@ include("KBR.jl")
 include("ConditionalMoments.jl")
 
 include("autocorrelation.jl")
+
 include("ModelEstimate.jl")
+include("theta_estimation.jl")
+include("lambda_estimation.jl")
+include("function_estimation.jl")
+include("model_error.jl")
+include("default_settings.jl")
 
 end # module ExponentialNoiseSDE
