@@ -16,6 +16,8 @@ export build_moments
 export ModelEstimateSettings, ModelEstimate
 export estimate_model
 
+include("utils.jl")
+
 include("Observation.jl")
 
 include("kernels.jl")
