@@ -1,9 +1,42 @@
 # Estimating SDE model (drift and noise functions + correlation time)
 
+abstract type FunctionIterateMethod end
+
+struct FiniteDiff <: FunctionIterateMethod
+    functionConvergenceValue::Float64
+    functionIterMax::Int64
+    function FiniteDiff(;
+        functionConvergenceValue = 0.2,
+        functionIterMax = 20
+    ) begin new(
+        functionConvergenceValue,
+        functionIterMax
+    )
+    end
+    end
+end
+
+struct SmoothedFiniteDiff 
+    nPointSmooth::Int64
+    functionConvergenceValue::Float64
+    functionIterMax::Int64
+    function SmoothedFiniteDiff(;
+        nPointSmooth = 3,
+        functionConvergenceValue = 0.2,
+        functionIterMax = 20
+    ) begin new(
+        nPointSmooth,
+        functionConvergenceValue,
+        functionIterMax
+    )
+    end
+    end
+end
+
 # MATLAB equivalent: FitOptionsClass.m
 struct ModelEstimateSettings
     thetaConvergenceValue::Float64
-    functionConvergenceValue::Float64
+    functionIterateMethod::Union{FiniteDiff,SmoothedFiniteDiff}
     fixThetaFlag::Bool
     fixThetaValue::Float64
     keepObservation::Bool
@@ -11,7 +44,7 @@ struct ModelEstimateSettings
     # Default settings
     function ModelEstimateSettings(;
         thetaConvergenceValue = 1E-2,
-        functionConvergenceValue = 0.2,
+        functionIterateMethod = SmoothedFiniteDiff(),
         fixThetaFlag = false,
         fixThetaValue = 0.0,
         keepObservation = true,
@@ -19,7 +52,7 @@ struct ModelEstimateSettings
     ) begin
         return new(
             thetaConvergenceValue,
-            functionConvergenceValue,
+            functionIterateMethod,
             fixThetaFlag,
             fixThetaValue,
             keepObservation,
@@ -75,12 +108,12 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
     # Estimate drift and noise functions
     lambda1_1 = lambdaProperties.lambda1Est[1,:] # Array of lambda^(1)_1
     lambda2_1 = lambdaProperties.lambda2Est[1,:] # Array of lambda^(2)_1
-    fEstimate, gEstimate, fInitial, gInitial = fg_interate(
+    fEstimate, gEstimate, fInitial, gInitial = fg_solve(
         lambda1_1,
         lambda2_1,
         thetaEst,
         conditionalMoments.xEvalPoints,
-        fitSettings.functionConvergenceValue
+        fitSettings.functionIterateMethod
     )
 
     # Mean fit error
@@ -195,9 +228,11 @@ function theta_fixed(X,dt,nuMax,fitSettings)
     )
 end
 
-function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
+function theta_search(X,dt,nuMax,thetaMax,thetaConvergenceValue)
     # Autocorrelation (single data)
+    @show nuMax
     dA = autocorr_increment(X,nuMax)
+    #dA = load_precalculated_dA()
 
     # First search
     thetaEstInitial, rNuMatrix, _ = theta_basis_function_fit(
@@ -205,14 +240,16 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
         dt,
         nuMax,
         thetaMax,
-        betaConvergenceValue
+        thetaConvergenceValue
     )
     # New maximum tau
     newNuMax = ceil(Int64, sqrt(thetaEstInitial)/dt)
-
+    @show newNuMax
     if newNuMax > nuMax
+        println("Calculating new ACF")
         newNuMax = nuMax
         dA = autocorr_increment(X,newNuMax)
+        #dA = load_precalculated_second_dA()
     end
 
     # Second search
@@ -222,7 +259,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
         dt,
         newNuMax,
         newThetaMax,
-        betaConvergenceValue
+        thetaConvergenceValue
     )
 
     # R matrix
@@ -237,7 +274,7 @@ function theta_search(X,dt,nuMax,thetaMax,betaConvergenceValue)
 end
 
 #NOTE: Make these anon functions into regular functions?
-function theta_basis_function_fit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
+function theta_basis_function_fit(dA,dt,nuMax,thetaMax,thetaConvergenceValue)
     # Objective function from matrix
     rNuMatrix = form_r_matrix(dt,nuMax)
     lambdaFunc = theta_c -> rNuMatrix(theta_c) \ dA
@@ -249,11 +286,18 @@ function theta_basis_function_fit(dA,dt,nuMax,thetaMax,betaConvergenceValue)
     opt = Opt(:LN_COBYLA, 1)
     opt.lower_bounds = 0.0
     opt.upper_bounds = thetaMax
+    opt.xtol_abs = 1E-12
     opt.min_objective = objective_function
-    funcMin, xMin, retval = optimize(opt, [thetaMax])
+    @show funcMin, xMin, retval = optimize(opt, [thetaMax])
     thetaEst = xMin[1]
     # Best fit lambda vector
-    lambdaStar = lambdaFunc(thetaEst)
+    @show lambdaStar = lambdaFunc(thetaEst)
+    
+    @show rNuMatrix(thetaEst)
+    @show lambdaFunc(thetaEst)
+    @show rNuMatrix(0.010259639889881)
+    @show lambdaFunc(0.010259639889881)
+    @show dA
 
     return thetaEst, rNuMatrix, lambdaStar
 end
@@ -272,9 +316,7 @@ function form_r_matrix(dt,nuMax)
     return rNuMatrix
 end
 
-function fg_interate(lambda1_1,lambda2_1,theta,Xcentre,betaConvergenceValue)
-    count_max = 1
-    
+function fg_solve(lambda1_1,lambda2_1,theta,Xcentre,functionIterateMethod::FiniteDiff)
     # Starting values
     fInitial = lambda1_1
     gInitial = sqrt.(abs.(lambda2_1))
@@ -284,11 +326,15 @@ function fg_interate(lambda1_1,lambda2_1,theta,Xcentre,betaConvergenceValue)
     # Iterate until converged
     count = 0
     totalError = Inf
-    while (totalError > betaConvergenceValue) && (count < count_max)
+    while (totalError > functionIterateMethod.functionConvergenceValue) && (count < functionIterateMethod.functionIterMax)
         count = count + 1
         
         fOld = fNew
         gOld = gNew
+
+        # Estimate gradients (finite differences)
+        fGrad = fdiffNU(xEvalPoints,fOld)
+        gGrad = fdiffNU(xEvalPoints,gOld)
         
         # Find updated values
         fNew, gNew = fixed_point_iterate(
@@ -296,8 +342,51 @@ function fg_interate(lambda1_1,lambda2_1,theta,Xcentre,betaConvergenceValue)
             lambda2_1,
             fOld,
             gOld,
-            theta,
-            Xcentre
+            fGrad,
+            gGrad,
+            theta
+        )
+        
+        totalError = sum((fNew .- fOld).^2) + sum((gNew .- gOld).^2)
+    end
+   return fNew, gNew, fInitial, gInitial 
+end
+
+moving_average(vs,n) = [sum(@view vs[i:(i+n-1)])/n for i in 1:(length(vs)-(n-1))]
+
+function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::SmoothedFiniteDiff)
+    # Starting values
+    fInitial = lambda1_1
+    gInitial = sqrt.(abs.(lambda2_1))
+    fNew = movmean(fInitial,functionIterateMethod.nPointSmooth)
+    gNew = movmean(gInitial,functionIterateMethod.nPointSmooth)
+    
+    # Iterate until converged
+    count = 0
+    totalError = Inf
+    while (totalError > functionIterateMethod.functionConvergenceValue) && (count < functionIterateMethod.functionIterMax)
+        count = count + 1
+        
+        fOld = fNew
+        gOld = gNew
+
+        # Estimate gradients (finite differences)
+        fOld = movmean(fOld,functionIterateMethod.nPointSmooth)
+        gOld = movmean(gOld,functionIterateMethod.nPointSmooth)
+        fGrad = fdiffNU(xEvalPoints,fOld)
+        gGrad = fdiffNU(xEvalPoints,gOld)
+        fGrad = movmean(fGrad,functionIterateMethod.nPointSmooth)
+        gGrad = movmean(gGrad,functionIterateMethod.nPointSmooth)
+        
+        # Find updated values
+        fNew, gNew = fixed_point_iterate(
+            lambda1_1,
+            lambda2_1,
+            fOld,
+            gOld,
+            fGrad,
+            gGrad,
+            theta
         )
         
         totalError = sum((fNew .- fOld).^2) + sum((gNew .- gOld).^2)
@@ -311,11 +400,7 @@ function lambda_search_linear(moment1,moment2,rMatrix)
     return LambdaProperties(lambda1, lambda2)
 end
 
-function fixed_point_iterate(lambda1_1,lambda2_1,f,g,theta,xEvalPoints)
-    fGrad = fdiffNU(xEvalPoints,f)
-    gGrad = fdiffNU(xEvalPoints,g)
-
-    # Updated functions
+function fixed_point_iterate(lambda1_1,lambda2_1,f,g,fGrad,gGrad,theta)
     fNew = lambda1_1 .- 0.5*g.*gGrad .- 
                 0.5*theta*(fGrad.*g.*gGrad .- f.*gGrad.^2)
     gNew = sqrt.(abs.(lambda2_1 .- 
@@ -345,4 +430,45 @@ function fdiffNU(x,F)
     dFdx[2:n-1] = (-h1_2.*F[1:n-2] + (h1_2 .- h0_2).*F[2:n-1] + h0_2.*F[3:n]) ./ den
     
     return dFdx
+end
+
+function load_precalculated_dA()
+    dA = [
+        -0.000582057549633207
+        -0.00200082119911433
+        -0.00391300658940873
+        -0.00611098179579842
+        -0.00846928666848296
+        -0.0109122835560818
+        -0.0133937924967669
+        -0.015882948452609
+        -0.018358366667826
+        -0.0208063744974986
+        -0.0232204816798446
+        -0.0255967317691245
+        -0.027936617102445
+        -0.0302447274405242
+        -0.0325229560133573
+    ]
+    return dA
+end
+function load_precalculated_second_dA()
+    dA = [
+        -0.000582057549633207
+        -0.00200082119911433
+        -0.00391300658940873
+        -0.00611098179579842
+        -0.00846928666848297
+        -0.0109122835560818
+        -0.0133937924967669
+        -0.0158829484526090
+        -0.0183583666678260
+        -0.0208063744974986
+        -0.0232204816798446
+        -0.0255967317691245
+        -0.0279366171024450
+        -0.0302447274405242
+        -0.0325229560133573
+    ]
+    return dA
 end
