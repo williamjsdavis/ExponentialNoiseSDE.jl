@@ -90,15 +90,8 @@ function small_data_test()
     end
 end
 
-# Get estimated model for a large amount of data
-function estimate_large_model()
-    X_data = readdlm("./data/exampleData.txt")[:]
-
-    obs = Observation(
-        X_data,
-        0.0050
-    )
-    
+# Get estimated model for a large amount of data (using default settings)
+function get_default_estimation_settings()
     ## Conditional moment settings
     nTimeShiftSamplePoints = 15
     nEvalPoints = 20
@@ -108,7 +101,6 @@ function estimate_large_model()
     
     # Variables/attributes
     timeShiftSamplePoints = collect(1:nTimeShiftSamplePoints)
-    momentSize = (nTimeShiftSamplePoints, nEvalPoints)
     
     momentSettings = ConditionalMomentSettings(
         timeShiftSamplePoints,
@@ -118,14 +110,55 @@ function estimate_large_model()
         bandwidth,
     )
     
+    ## Model estimates
+    # Settings
+    modelSettings = ModelEstimateSettings()
+
+    return momentSettings, modelSettings
+end
+
+# Get estimated model for a large amount of data (using default settings)
+function estimate_large_model()
+    # Get settings
+    momentSettings, modelSettings = get_default_estimation_settings()
+
+    ## Data
+    X_data = readdlm("./data/exampleData.txt")[:]
+
+    obs = Observation(
+        X_data,
+        0.0050
+    )
+    
     # Conditional moments
     conditionalMoments = build_moments(obs, momentSettings)
     
     ## Model estimates
-    # Settings
-    modelSettings = ModelEstimateSettings()
+    modelEstimate = estimate_model(conditionalMoments, modelSettings)
+
+    return modelEstimate
+end
+
+# Get estimated model for a large amount of data (unsmoothed)
+function estimate_large_model_unsmoothed()
+    # Get settings
+    momentSettings, _ = get_default_estimation_settings()
+    modelSettings = ModelEstimateSettings(
+        functionIterateMethod = FiniteDiff()
+    )
+
+    ## Data
+    X_data = readdlm("./data/exampleData.txt")[:]
+
+    obs = Observation(
+        X_data,
+        0.0050
+    )
     
-    # Estimating
+    # Conditional moments
+    conditionalMoments = build_moments(obs, momentSettings)
+    
+    ## Model estimates
     modelEstimate = estimate_model(conditionalMoments, modelSettings)
 
     return modelEstimate
@@ -239,6 +272,30 @@ function validate_functions(modelEstimate)
         @test all(driftInitialError .< driftInitialTol)
         @test all(driftEstimateError .< driftEstimteTol)
         @test all(noiseInitialError .< noiseInitialTol)
+        @test all(noiseEstimateError .< noiseEstimteTol)
+    end
+end
+
+# Test estimated functions
+function validate_unsmoothed_functions(modelEstimateUnsmoothed,modelEstimate)
+    # Drift function (estimate)
+    driftEstimateMATLAB = DelimitedFiles.readdlm("./data/driftEstimateNoSmoothMATLAB.txt")[:]
+
+    driftEstimteTol = 0.15
+    driftEstimateError = abs.(modelEstimateUnsmoothed.driftEstimate .- driftEstimateMATLAB)
+
+    # Noise function (estimate)
+    noiseEstimateMATLAB = DelimitedFiles.readdlm("./data/noiseEstimateNoSmoothMATLAB.txt")[:]
+
+    noiseEstimteTol = 0.03
+    noiseEstimateError = abs.(modelEstimateUnsmoothed.noiseEstimate .- noiseEstimateMATLAB)
+
+    @testset "MATLAB validation: unsmoothed function properties" begin
+        @test all(modelEstimateUnsmoothed.driftInitial .== modelEstimate.driftInitial)
+        @test all(modelEstimateUnsmoothed.noiseInitial .== modelEstimate.noiseInitial)
+        @test !all(modelEstimateUnsmoothed.driftEstimate .== modelEstimate.driftEstimate)
+        @test !all(modelEstimateUnsmoothed.noiseEstimate .== modelEstimate.noiseEstimate)
+        @test all(driftEstimateError .< driftEstimteTol)
         @test all(noiseEstimateError .< noiseEstimteTol)
     end
 end

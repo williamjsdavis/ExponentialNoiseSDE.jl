@@ -309,7 +309,7 @@ function form_r_matrix(dt,nuMax)
     return rNuMatrix
 end
 
-function fg_solve(lambda1_1,lambda2_1,theta,Xcentre,functionIterateMethod::FiniteDiff)
+function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::FiniteDiff)
     # Starting values
     fInitial = lambda1_1
     gInitial = sqrt.(abs.(lambda2_1))
@@ -344,8 +344,6 @@ function fg_solve(lambda1_1,lambda2_1,theta,Xcentre,functionIterateMethod::Finit
     end
    return fNew, gNew, fInitial, gInitial 
 end
-
-moving_average(vs,n) = [sum(@view vs[i:(i+n-1)])/n for i in 1:(length(vs)-(n-1))]
 
 function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::SmoothedFiniteDiff)
     # Starting values

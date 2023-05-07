@@ -13,6 +13,7 @@ export Epanechnikov
 export ConditionalMoments, ConditionalMomentSettings
 export build_moments
 
+export FiniteDiff, SmoothedFiniteDiff
 export ModelEstimateSettings, ModelEstimate
 export estimate_model
 
