@@ -360,7 +360,9 @@ function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::S
     gInitial = sqrt.(abs.(lambda2_1))
     fNew = movmean(fInitial,functionIterateMethod.nPointSmooth)
     gNew = movmean(gInitial,functionIterateMethod.nPointSmooth)
-    
+    lambda1_1_smooth = movmean(lambda1_1,functionIterateMethod.nPointSmooth)
+    lambda2_1_smooth = movmean(lambda2_1,functionIterateMethod.nPointSmooth)
+
     # Iterate until converged
     count = 0
     totalError = Inf
@@ -380,15 +382,15 @@ function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::S
         
         # Find updated values
         fNew, gNew = fixed_point_iterate(
-            lambda1_1,
-            lambda2_1,
+            lambda1_1_smooth,
+            lambda2_1_smooth,
             fOld,
             gOld,
             fGrad,
             gGrad,
             theta
         )
-        
+        @show (count, fNew, gNew)
         totalError = sum((fNew .- fOld).^2) + sum((gNew .- gOld).^2)
     end
    return fNew, gNew, fInitial, gInitial 
