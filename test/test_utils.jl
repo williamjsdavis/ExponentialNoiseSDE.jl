@@ -21,16 +21,18 @@ function small_data_test()
         X_data,
         0.0050
     )
-    @testset "Observation" begin
+    @testset "Observation attributes" begin
         @test obs.dt == 0.0050
+        @test obs.N == N_data
+        @test size(obs.X) == (N_data,)
     end
 
     ## Conditional moment settings
     nTimeShiftSamplePoints = 6
     nEvalPoints = 5
-    xEvalLims = (-1.0,1.0)
+    xEvalLims = (-0.1,0.1)
     kernel = "Epanechnikov"
-    bandwidth = 0.1
+    bandwidth = 0.01
 
     # Variables/attributes
     timeShiftSamplePoints = collect(1:nTimeShiftSamplePoints)
@@ -45,14 +47,19 @@ function small_data_test()
     )
 
     @testset "ConditionalMomentSettings" begin
-        @test momentSettings.bandwidth == 0.1
+        @test momentSettings.bandwidth == 0.01
     end
 
     # Conditional moments
     conditionalMoments = build_moments(obs, momentSettings)
 
-    @testset "ConditionalMoments" begin
+    @testset "ConditionalMoments attributes" begin
         @test size(conditionalMoments.moment1) == momentSize
+        @test size(conditionalMoments.moment2) == momentSize
+    end
+    @testset "ConditionalMoments values" begin
+        @test !any(isnan.(conditionalMoments.moment1))
+        @test !any(isnan.(conditionalMoments.moment2))
     end
 
     ## Model estimates
@@ -68,12 +75,18 @@ function small_data_test()
     # Estimating
     modelEstimate = estimate_model(conditionalMoments, modelSettings1)
 
-    @testset "ModelEstimate" begin
+    @testset "ModelEstimate attributes" begin
         @test size(modelEstimate.driftEstimate) == (nEvalPoints,)
         @test size(modelEstimate.noiseEstimate) == (nEvalPoints,)
         @test size(modelEstimate.driftInitial) == (nEvalPoints,)
         @test size(modelEstimate.noiseInitial) == (nEvalPoints,)
+    end
+    @testset "ModelEstimate values" begin
         @test modelEstimate.correlationEstimate > -1.0
+        @test !any(isnan.(modelEstimate.driftInitial))
+        @test !any(isnan.(modelEstimate.noiseInitial))
+        @test !any(isnan.(modelEstimate.driftEstimate))
+        @test !any(isnan.(modelEstimate.noiseEstimate))
     end
 end
 
