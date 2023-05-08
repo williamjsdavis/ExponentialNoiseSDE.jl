@@ -94,11 +94,11 @@ function small_data_test()
     ## Bootstrapping uncertainties
 
     # Settings
-    bootstrapSettings1 = BootstrapSettings(blockLength=100, nSamples=5, displayOutputFlag=false)
+    bootstrapSettings1 = BootstrapSettings(blockLength=100, nSamples=7, displayOutputFlag=false)
     bootstrapSettings2 = BootstrapSettings()
     @testset "BootstrapSettings" begin
         @test bootstrapSettings1.blockLength == 100
-        @test bootstrapSettings1.nSamples == 5
+        @test bootstrapSettings1.nSamples == 7
         @test bootstrapSettings1.displayOutputFlag == false
         @test bootstrapSettings2.blockLength == 500
         @test bootstrapSettings2.nSamples == 20
@@ -107,7 +107,7 @@ function small_data_test()
 
     # Estimating
     bootstrapStatistics = estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1)
-    @testset "BootstrapSettings" begin
+    @testset "BootstrapStatistics" begin
         @test size(bootstrapStatistics.correlationEstimate[:mean]) == ()
         @test size(bootstrapStatistics.correlationEstimate[:percentiles95]) == (2,)
         @test size(bootstrapStatistics.modelError[:mean]) == ()

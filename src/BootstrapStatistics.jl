@@ -23,6 +23,7 @@ end
 # Calculate sample statistics from bootstrap samples
 function calculate_sample_statistics(bootstrapEstimates::Array{BootstrapModelEstimate},bootstrapSettings::BootstrapSettings)
     # Samples
+    nEvalPoints = length(bootstrapEstimates[1].driftEstimate)
     corrSamples = broadcast(x->x.correlationEstimate, bootstrapEstimates)
     errorSamples = broadcast(x->x.modelError.meanAbsoluteError, bootstrapEstimates)
     get_drift_samples = j->broadcast(x->x.driftEstimate[j], bootstrapEstimates)
@@ -31,27 +32,27 @@ function calculate_sample_statistics(bootstrapEstimates::Array{BootstrapModelEst
     # Mean
     corrMean = mean(corrSamples)
     errorMean = mean(errorSamples)
-    driftMean = broadcast(i->mean(get_drift_samples(i)),eachindex(bootstrapEstimates))
-    noiseMean = broadcast(i->mean(get_noise_samples(i)),eachindex(bootstrapEstimates))
+    driftMean = broadcast(i->mean(get_drift_samples(i)),1:nEvalPoints)
+    noiseMean = broadcast(i->mean(get_noise_samples(i)),1:nEvalPoints)
 
     # Median
     corrMedian = median(corrSamples)
     errorMedian = median(errorSamples)
-    driftMedian = broadcast(i->mean(get_drift_samples(i)),eachindex(bootstrapEstimates))
-    noiseMedian = broadcast(i->mean(get_noise_samples(i)),eachindex(bootstrapEstimates))
+    driftMedian = broadcast(i->mean(get_drift_samples(i)),1:nEvalPoints)
+    noiseMedian = broadcast(i->mean(get_noise_samples(i)),1:nEvalPoints)
     
     # Standard deviations
     corrStd = std(corrSamples)
     errorStd = std(errorSamples)
-    driftStd = broadcast(i->std(get_drift_samples(i)),eachindex(bootstrapEstimates))
-    noiseStd = broadcast(i->std(get_noise_samples(i)),eachindex(bootstrapEstimates))
+    driftStd = broadcast(i->std(get_drift_samples(i)),1:nEvalPoints)
+    noiseStd = broadcast(i->std(get_noise_samples(i)),1:nEvalPoints)
 
     # Percentiles
     setPrc = [0.025,0.975]
     corrPrc = quantile(corrSamples,setPrc)
     errorPrc = quantile(errorSamples,setPrc)
-    driftPrc = broadcast(i->quantile(get_drift_samples(i),setPrc),eachindex(bootstrapEstimates))
-    noisePrc = broadcast(i->quantile(get_noise_samples(i),setPrc),eachindex(bootstrapEstimates))
+    driftPrc = broadcast(i->quantile(get_drift_samples(i),setPrc),1:nEvalPoints)
+    noisePrc = broadcast(i->quantile(get_noise_samples(i),setPrc),1:nEvalPoints)
 
     return BootstrapStatistics(
         generate_statistics_dict(corrMean,corrMedian,corrStd,corrPrc),
