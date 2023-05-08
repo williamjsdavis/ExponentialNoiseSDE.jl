@@ -7,7 +7,7 @@ function ModelEstimateSettings(;
         fixThetaFlag = false,
         fixThetaValue = 0.0,
         keepObservation = true,
-        displayOutputFlag = true
+        displayOutputFlag = false
     ) begin
         return ModelEstimateSettings(
             thetaConvergenceValue,

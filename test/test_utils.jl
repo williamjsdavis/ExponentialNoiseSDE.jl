@@ -66,7 +66,7 @@ function small_data_test()
 
     # Settings
     modelSettings1 = ModelEstimateSettings(displayOutputFlag=false)
-    modelSettings2 = ModelEstimateSettings(thetaConvergenceValue=1E-5)
+    modelSettings2 = ModelEstimateSettings(thetaConvergenceValue=1E-5,displayOutputFlag=true)
     @testset "ModelEstimateSettings" begin
         @test modelSettings1.thetaConvergenceValue == 1E-2
         @test modelSettings2.thetaConvergenceValue == 1E-5
