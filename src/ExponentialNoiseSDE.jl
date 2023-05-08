@@ -19,7 +19,7 @@ export ModelEstimateSettings, ModelEstimate
 export estimate_model
 
 export BootstrapSettings
-export estimate_bootstrap_uncertainties
+export estimate_bootstrap_statistics
 
 include("utils.jl")
 
@@ -38,6 +38,7 @@ include("function_estimation.jl")
 include("model_error.jl")
 
 include("Bootstrap.jl")
+include("BootstrapStatistics.jl")
 
 include("default_settings.jl")
 

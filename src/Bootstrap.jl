@@ -1,6 +1,6 @@
 ## Bootstrap methods for uncertainties
+# MATLAB equivalent: SPbootstrapClass.m
 
-#NOTE: Find out if this can be done in parallel
 # MATLAB equivalent: BootstrapOptionsClass.m
 struct BootstrapSettings
     blockLength::Int64
@@ -8,6 +8,7 @@ struct BootstrapSettings
     displayOutputFlag::Bool
 end
 
+# A single bootstrap model estimate
 struct BootstrapModelEstimate
     correlationEstimate::Float64
     driftEstimate::Array{Float64,1}
@@ -15,25 +16,8 @@ struct BootstrapModelEstimate
     modelError
 end
 
-struct BootstrapStatistics
-    correlationEstimate
-    driftEstimate
-    noiseEstimate
-    modelError
-end
-
-# MATLAB equivalent: SPbootstrapClass.m
-struct BootstrapEstimate
-    distributions
-    standardErrors
-    percentiles95
-    meanAbsoluteError
-    modelEstimate::ModelEstimate
-    bootstrapSettings::BootstrapSettings
-end
-
-# Estimate bootstrap uncertainties
-function estimate_bootstrap_uncertainties(modelEstimate::ModelEstimate,bootstrapSettings::BootstrapSettings)
+# Exported function
+function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSettings::BootstrapSettings)
     # Toggle printing
     verbose(
         bootstrapSettings.displayOutputFlag, 
@@ -51,11 +35,12 @@ function estimate_bootstrap_uncertainties(modelEstimate::ModelEstimate,bootstrap
     originalObs = modelEstimate.conditionalMoments.obervation
     bootsrapEstimates = block_bootstrap(originalObs, estimate_model_set, bootstrapSettings)
 
-    bootstrapStatistics = calculate_bootstrap_statistics(bootsrapEstimates)
+    bootstrapStatistics = calculate_sample_statistics(bootsrapEstimates,bootstrapSettings)
 
     return bootstrapStatistics
 end
 
+# Initialize results array and create bootstrap sampler
 function block_bootstrap(obs,estimate_model_set,bootstrapSettings)
     bootstrapSampler = make_bootstrap_index_sampler(obs.N,bootstrapSettings.blockLength)
     bootsrapEstimates = Array{BootstrapModelEstimate}(undef, bootstrapSettings.nSamples)
@@ -71,6 +56,7 @@ function block_bootstrap(obs,estimate_model_set,bootstrapSettings)
     return bootsrapEstimates
 end
 
+# Calculate all samples and estimates
 function dispatch_bootstrap_calculations!(bootsrapEstimates,obs,estimate_model_set,bootstrapSampler,displayOutputFlag)
     for i in eachindex(bootsrapEstimates)
         verbose(
@@ -81,55 +67,7 @@ function dispatch_bootstrap_calculations!(bootsrapEstimates,obs,estimate_model_s
     end
 end
 
-function generate_statistics_dict(varMean,varMedian,varStd,varPrc)
-    return Dict(
-        :mean=>varMean,
-        :median=>varMedian,
-        :std=>varStd,
-        :percentiles95=>varPrc,
-    )
-end
-
-function calculate_bootstrap_statistics(bootstrapEstimates)
-    # Samples
-    corrSamples = broadcast(x->x.correlationEstimate, bootstrapEstimates)
-    errorSamples = broadcast(x->x.modelError.meanAbsoluteError, bootstrapEstimates)
-    get_drift_samples = j->broadcast(x->x.driftEstimate[j], bootstrapEstimates)
-    get_noise_samples = j->broadcast(x->x.noiseEstimate[j], bootstrapEstimates)
-
-    # Mean
-    corrMean = mean(corrSamples)
-    errorMean = mean(errorSamples)
-    driftMean = broadcast(i->mean(get_drift_samples(i)),eachindex(bootstrapEstimates))
-    noiseMean = broadcast(i->mean(get_noise_samples(i)),eachindex(bootstrapEstimates))
-
-    # Median
-    corrMedian = median(corrSamples)
-    errorMedian = median(errorSamples)
-    driftMedian = broadcast(i->mean(get_drift_samples(i)),eachindex(bootstrapEstimates))
-    noiseMedian = broadcast(i->mean(get_noise_samples(i)),eachindex(bootstrapEstimates))
-    
-    # Standard deviations
-    corrStd = std(corrSamples)
-    errorStd = std(errorSamples)
-    driftStd = broadcast(i->std(get_drift_samples(i)),eachindex(bootstrapEstimates))
-    noiseStd = broadcast(i->std(get_noise_samples(i)),eachindex(bootstrapEstimates))
-
-    # Percentiles
-    setPrc = [0.025,0.975]
-    corrPrc = quantile(corrSamples,setPrc)
-    errorPrc = quantile(errorSamples,setPrc)
-    driftPrc = broadcast(i->quantile(get_drift_samples(i),setPrc),eachindex(bootstrapEstimates))
-    noisePrc = broadcast(i->quantile(get_noise_samples(i),setPrc),eachindex(bootstrapEstimates))
-
-    return BootstrapStatistics(
-        generate_statistics_dict(corrMean,corrMedian,corrStd,corrPrc),
-        generate_statistics_dict(driftMean,driftMedian,driftStd,driftPrc),
-        generate_statistics_dict(noiseMean,noiseMedian,noiseStd,noisePrc),
-        generate_statistics_dict(errorMean,errorMedian,errorStd,errorPrc)
-    )
-end
-
+# Create a single bootstrap sample and model estimate
 function make_bootstrap_estimate(obs,estimate_model_set,bootstrapSampler)
     bootstrapObs = make_bootstrap_sample(obs,bootstrapSampler)
     bootstrapModelEstimate = estimate_model_set(bootstrapObs)
@@ -141,7 +79,7 @@ function make_bootstrap_estimate(obs,estimate_model_set,bootstrapSampler)
     )
 end
 
-#bootstrapObservation = make_bootstrap_sample(obs::Observation)
+# Create a bootstrap observation
 function make_bootstrap_sample(obs,bootstrapSampler)
     # Code here
     X_boostrap = obs.X[bootstrapSampler()]
@@ -151,7 +89,8 @@ function make_bootstrap_sample(obs,bootstrapSampler)
     )
 end
 
-# Terrible anon. function-based implementation...
+# Create a bootstrap sampler
+#NOTE: Terrible anon. function-based implementation...
 function make_bootstrap_index_sampler(N,blockLength)
     rdraw2() = rand(1:N,ceil(Int, N/blockLength))
     drawin(i) = i:(i+blockLength-1)

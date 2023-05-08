@@ -65,11 +65,13 @@ function small_data_test()
     ## Model estimates
 
     # Settings
-    modelSettings1 = ModelEstimateSettings()
+    modelSettings1 = ModelEstimateSettings(displayOutputFlag=false)
     modelSettings2 = ModelEstimateSettings(thetaConvergenceValue=1E-5)
     @testset "ModelEstimateSettings" begin
         @test modelSettings1.thetaConvergenceValue == 1E-2
         @test modelSettings2.thetaConvergenceValue == 1E-5
+        @test modelSettings1.displayOutputFlag == false
+        @test modelSettings2.displayOutputFlag == true
     end
 
     # Estimating
@@ -104,7 +106,7 @@ function small_data_test()
     end
 
     # Estimating
-    bootstrapStatistics = estimate_bootstrap_uncertainties(modelEstimate,bootstrapSettings1)
+    bootstrapStatistics = estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1)
     @testset "BootstrapSettings" begin
         @test size(bootstrapStatistics.correlationEstimate[:mean]) == ()
         @test size(bootstrapStatistics.correlationEstimate[:percentiles95]) == (2,)
