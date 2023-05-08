@@ -5,7 +5,7 @@ greet() = print("Hello World!")
 #TODO: update code to use mean()
 using FFTW: fft, ifft
 using NLopt: Opt, optimize
-using Statistics: mean, var
+using Statistics: mean, var, std, median, quantile
 using Random:rand
 
 export Observation
@@ -17,6 +17,9 @@ export build_moments
 export FiniteDiff, SmoothedFiniteDiff
 export ModelEstimateSettings, ModelEstimate
 export estimate_model
+
+export BootstrapSettings
+export estimate_bootstrap_uncertainties
 
 include("utils.jl")
 

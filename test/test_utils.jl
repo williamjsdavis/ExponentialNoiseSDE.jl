@@ -15,7 +15,7 @@ end
 # Test with a small amount of data
 function small_data_test()
     ## Observations
-    X_data = DelimitedFiles.readdlm("./data/exampleData.txt")[1:100]
+    X_data = DelimitedFiles.readdlm("./data/exampleData.txt")[1:1000]
     N_data = length(X_data)
     obs = Observation(
         X_data,
@@ -66,7 +66,7 @@ function small_data_test()
 
     # Settings
     modelSettings1 = ModelEstimateSettings()
-    modelSettings2 = ModelEstimateSettings(thetaConvergenceValue = 1E-5)
+    modelSettings2 = ModelEstimateSettings(thetaConvergenceValue=1E-5)
     @testset "ModelEstimateSettings" begin
         @test modelSettings1.thetaConvergenceValue == 1E-2
         @test modelSettings2.thetaConvergenceValue == 1E-5
@@ -87,6 +87,32 @@ function small_data_test()
         @test !any(isnan.(modelEstimate.noiseInitial))
         @test !any(isnan.(modelEstimate.driftEstimate))
         @test !any(isnan.(modelEstimate.noiseEstimate))
+    end
+
+    ## Bootstrapping uncertainties
+
+    # Settings
+    bootstrapSettings1 = BootstrapSettings(blockLength=100, nSamples=5, displayOutputFlag=false)
+    bootstrapSettings2 = BootstrapSettings()
+    @testset "BootstrapSettings" begin
+        @test bootstrapSettings1.blockLength == 100
+        @test bootstrapSettings1.nSamples == 5
+        @test bootstrapSettings1.displayOutputFlag == false
+        @test bootstrapSettings2.blockLength == 500
+        @test bootstrapSettings2.nSamples == 20
+        @test bootstrapSettings2.displayOutputFlag == true
+    end
+
+    # Estimating
+    bootstrapStatistics = estimate_bootstrap_uncertainties(modelEstimate,bootstrapSettings1)
+    @testset "BootstrapSettings" begin
+        @test size(bootstrapStatistics.correlationEstimate[:mean]) == ()
+        @test size(bootstrapStatistics.correlationEstimate[:percentiles95]) == (2,)
+        @test size(bootstrapStatistics.modelError[:mean]) == ()
+        @test size(bootstrapStatistics.modelError[:percentiles95]) == (2,)
+        @test size(bootstrapStatistics.driftEstimate[:mean]) == (nEvalPoints,)
+        @test size(bootstrapStatistics.driftEstimate[:percentiles95]) == (nEvalPoints,)
+        @test size(bootstrapStatistics.driftEstimate[:percentiles95][1]) == (2,)
     end
 end
 

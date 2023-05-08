@@ -46,10 +46,12 @@ end
 # Bootstrapping
 function BootstrapSettings(;
         blockLength = 500,
-        nSamples = 20
+        nSamples = 20,
+        displayOutputFlag = true
     ) begin BootstrapSettings(
         blockLength,
-        nSamples
+        nSamples,
+        displayOutputFlag
     )
     end
 end

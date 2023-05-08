@@ -22,3 +22,5 @@ validate_functions(modelEstimate)
 # Against unsmoothed finite diff calculations
 modelEstimateUnsmoothed = estimate_large_model_unsmoothed()
 validate_unsmoothed_functions(modelEstimateUnsmoothed,modelEstimate)
+
+## Bootstrapping uncertainties
