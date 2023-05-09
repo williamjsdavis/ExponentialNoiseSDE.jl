@@ -1,24 +1,4 @@
 ```julia
-]dev ExponentialNoiseSDE
-```
-
-    [32m[1m   Resolving[22m[39m package versions...
-    [32m[1m  No Changes[22m[39m to `~/Documents/Julia/test-ExponentialNoiseSDE/Project.toml`
-    [32m[1m  No Changes[22m[39m to `~/Documents/Julia/test-ExponentialNoiseSDE/Manifest.toml`
-
-
-
-```julia
-]status
-```
-
-    [32m[1mStatus[22m[39m `~/Documents/Julia/test-ExponentialNoiseSDE/Project.toml`
-     [90m [e05663f3] [39mExponentialNoiseSDE v0.1.0 `~/.julia/dev/ExponentialNoiseSDE`
-     [90m [91a5bcdd] [39mPlots v1.38.11
-
-
-
-```julia
 using ExponentialNoiseSDE
 using DelimitedFiles
 using Plots
