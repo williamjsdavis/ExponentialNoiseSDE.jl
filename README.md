@@ -7,6 +7,12 @@ This is a port of the `MATLAB` package [`secn-PR`](https://github.com/williamjsd
 
 An example of the use of this package is shown in the directory `example/`.
 
+# Banchmarking
+
+Individual steps in the method can be individually benchmarked. The result below shows that the main computational cost comes from calculation of the conditional moments.
+
+<img src="/example/benchmarking_time.png" height="400"/>
+
 # TODOs
 
 - [ ] Add observations from multiple data sources
