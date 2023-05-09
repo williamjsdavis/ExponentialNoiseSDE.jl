@@ -19,8 +19,7 @@ An example of the use of this package is shown in the directory `example/`.
 
 # Changelog
 
-- Version 1.0 - First official release
-- Version 0.9 - Introduced version I used for my research.
+- Version v0.1.0 - WIP
 
 # References
 
