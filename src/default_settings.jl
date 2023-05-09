@@ -47,10 +47,12 @@ end
 function BootstrapSettings(;
         blockLength = 500,
         nSamples = 20,
+        biasCorrection = true,
         displayOutputFlag = true
     ) begin BootstrapSettings(
         blockLength,
         nSamples,
+        biasCorrection,
         displayOutputFlag
     )
     end

@@ -21,9 +21,12 @@ function generate_statistics_dict(varMean,varMedian,varStd,varPrc)
 end
 
 # Calculate sample statistics from bootstrap samples
-function calculate_sample_statistics(bootstrapEstimates::Array{BootstrapModelEstimate},bootstrapSettings::BootstrapSettings)
+function calculate_sample_statistics(
+        modelEstimate::ModelEstimate,
+        bootstrapEstimates::Array{BootstrapModelEstimate},
+        bootstrapSettings::BootstrapSettings)
     # Samples
-    nEvalPoints = length(bootstrapEstimates[1].driftEstimate)
+    nEvalPoints = modelEstimate.conditionalMoments.momentSettings.nEvalPoints
     corrSamples = broadcast(x->x.correlationEstimate, bootstrapEstimates)
     errorSamples = broadcast(x->x.modelError.meanAbsoluteError, bootstrapEstimates)
     get_drift_samples = j->broadcast(x->x.driftEstimate[j], bootstrapEstimates)
@@ -46,6 +49,17 @@ function calculate_sample_statistics(bootstrapEstimates::Array{BootstrapModelEst
     errorStd = std(errorSamples)
     driftStd = broadcast(i->std(get_drift_samples(i)),1:nEvalPoints)
     noiseStd = broadcast(i->std(get_noise_samples(i)),1:nEvalPoints)
+
+    #NOTE: Perhaps rethink this in the future
+    if bootstrapSettings.biasCorrection
+        corrBias = corrMean - modelEstimate.correlationEstimate
+        drift_bias = j -> driftMean[j] - modelEstimate.driftEstimate[j]
+        noise_bias = j -> noiseMean[j] - modelEstimate.noiseEstimate[j]
+        
+        corrSamples = corrSamples .- corrBias
+        get_drift_samples = j->broadcast(x->x.driftEstimate[j] - drift_bias(j), bootstrapEstimates)
+        get_noise_samples = j->broadcast(x->x.noiseEstimate[j] - noise_bias(j), bootstrapEstimates)
+    end
 
     # Percentiles
     setPrc = [0.025,0.975]

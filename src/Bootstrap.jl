@@ -5,6 +5,7 @@
 struct BootstrapSettings
     blockLength::Int64
     nSamples::Int64
+    biasCorrection::Bool
     displayOutputFlag::Bool
 end
 
@@ -35,7 +36,7 @@ function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSet
     originalObs = modelEstimate.conditionalMoments.obervation
     bootsrapEstimates = block_bootstrap(originalObs, estimate_model_set, bootstrapSettings)
 
-    bootstrapStatistics = calculate_sample_statistics(bootsrapEstimates,bootstrapSettings)
+    bootstrapStatistics = calculate_sample_statistics(modelEstimate,bootsrapEstimates,bootstrapSettings)
 
     return bootstrapStatistics
 end
