@@ -2,8 +2,8 @@
 
 # Lambda properties
 struct LambdaProperties
-    lambda1Est # Array{Float64,2} ?
-    lambda2Est # Array{Float64,2} ?
+    lambda1Est::Array{Float64,2}
+    lambda2Est::Array{Float64,2}
 end
 
 # Lambda estimation

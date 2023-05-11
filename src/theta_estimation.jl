@@ -2,10 +2,10 @@
 
 # Theta properties
 struct ThetaProperties
-    nuMax
-    rMatrix # Array{Float64,2} ?
-    dA
-    lambdaStar
+    nuMax::Int64
+    rMatrix::Array{Float64,2}
+    dA::Array{Float64,1}
+    lambdaStar::Array{Float64,1}
 end
 
 # Estimating theta
