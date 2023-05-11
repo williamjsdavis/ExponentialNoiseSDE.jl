@@ -9,7 +9,11 @@ An example of the use of this package is shown in the directory `example/`.
 
 # Banchmarking
 
-Individual steps in the method can be individually benchmarked. The result below shows that the main computational cost comes from calculation of the conditional moments.
+This code has been benchmarked and exhibits a competative scaling compared to [`secn-PR`](https://github.com/williamjsdavis/secn-PR), as shown below.
+
+<img src="/example/benchmarking_time_comparison.png" height="400"/>
+
+Individual steps in the method can be benchmarked. The result below shows that the main computational cost comes from calculation of the conditional moments.
 
 <img src="/example/benchmarking_time.png" height="400"/>
 
