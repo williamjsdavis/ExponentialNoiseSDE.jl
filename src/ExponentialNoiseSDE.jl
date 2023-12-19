@@ -1,7 +1,5 @@
 module ExponentialNoiseSDE
 
-greet() = print("Hello World!")
-
 #TODO: update code to use mean()
 using FFTW: fft, ifft
 using NLopt: Opt, optimize
