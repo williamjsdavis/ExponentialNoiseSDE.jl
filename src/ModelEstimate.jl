@@ -17,6 +17,7 @@ struct ModelEstimate
     noiseEstimate::Array{Float64,1}
     driftInitial::Array{Float64,1}
     noiseInitial::Array{Float64,1}
+    functionDiagnostics::FunctionIterationDiagnostics
     modelError
     conditionalMoments::ConditionalMoments
     thetaProperties
@@ -39,7 +40,7 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
     # Estimate drift and noise functions
     lambda1_1 = lambdaProperties.lambda1Est[1,:] # Array of lambda^(1)_1
     lambda2_1 = lambdaProperties.lambda2Est[1,:] # Array of lambda^(2)_1
-    fEstimate, gEstimate, fInitial, gInitial = fg_solve_with_data(
+    fEstimate, gEstimate, fInitial, gInitial, functionDiagnostics = fg_solve_with_data(
         lambda1_1,
         lambda2_1,
         thetaEst,
@@ -66,6 +67,7 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
         noiseEstimate,
         driftInitial,
         noiseInitial,
+        functionDiagnostics,
         modelError,
         conditionalMoments,
         thetaProperties,

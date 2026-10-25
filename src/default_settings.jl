@@ -20,9 +20,9 @@ function ModelEstimateSettings(;
     end
 end
 
-# Finite difference function solution
+# Finite difference function solution (convergence value is a relative change)
 function FiniteDiff(;
-        functionConvergenceValue = 0.2,
+        functionConvergenceValue = 1E-4,
         functionIterMax = 20
     ) begin FiniteDiff(
         functionConvergenceValue,
@@ -33,7 +33,7 @@ end
 
 function SmoothedFiniteDiff(;
         nPointSmooth = 3,
-        functionConvergenceValue = 0.2,
+        functionConvergenceValue = 1E-4,
         functionIterMax = 20
     ) begin SmoothedFiniteDiff(
         nPointSmooth,
