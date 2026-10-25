@@ -39,7 +39,7 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
     # Estimate drift and noise functions
     lambda1_1 = lambdaProperties.lambda1Est[1,:] # Array of lambda^(1)_1
     lambda2_1 = lambdaProperties.lambda2Est[1,:] # Array of lambda^(2)_1
-    fEstimate, gEstimate, fInitial, gInitial = fg_solve(
+    fEstimate, gEstimate, fInitial, gInitial = fg_solve_with_data(
         lambda1_1,
         lambda2_1,
         thetaEst,

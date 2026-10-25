@@ -18,9 +18,10 @@ function mean_fit_error(
     moment2Difference = conditionalMoments.moment2 - 
         thetaProperties.rMatrix * lambdaProperties.lambda2Est
 
-    # Fit summed mean absolute errors
-    meanAbsoluteErrorMoment1 = mean(abs.(moment1Difference))
-    meanAbsoluteErrorMoment2 = mean(abs.(moment2Difference))
+    # Fit summed mean absolute errors, over the evaluation points with data
+    # (moments are NaN where there are none)
+    meanAbsoluteErrorMoment1 = mean(abs, filter(isfinite, moment1Difference))
+    meanAbsoluteErrorMoment2 = mean(abs, filter(isfinite, moment2Difference))
     meanAbsoluteError = 0.5*(meanAbsoluteErrorMoment1 + meanAbsoluteErrorMoment2)
 
     if displayOutputFlag

@@ -3,6 +3,22 @@
 # Conditional print
 verbose(cond::Bool,message::String) = cond ? println(message) : nothing
 
+# Index ranges of the runs of consecutive true values, e.g. [1,1,0,1] -> [1:2, 4:4]
+function true_runs(mask)
+    runs = UnitRange{Int}[]
+    runStart = 0
+    for (i, value) in enumerate(mask)
+        if value && runStart == 0
+            runStart = i
+        elseif !value && runStart != 0
+            push!(runs, runStart:i-1)
+            runStart = 0
+        end
+    end
+    runStart != 0 && push!(runs, runStart:length(mask))
+    return runs
+end
+
 # Moving average, inspired my MATLAB
 """
 M = movmean(X,n) returns an array of local k-point mean values, where each mean is calculated over a sliding window of length k across neighboring elements of A. 

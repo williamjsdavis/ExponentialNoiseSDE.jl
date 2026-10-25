@@ -8,10 +8,33 @@ struct FiniteDiff <: FunctionIterateMethod
     functionIterMax::Int64
 end
 
-struct SmoothedFiniteDiff 
+struct SmoothedFiniteDiff
     nPointSmooth::Int64
     functionConvergenceValue::Float64
     functionIterMax::Int64
+end
+
+# Solve separately on each run of consecutive evaluation points with data, so
+# points without data (NaN lambdas) do not spread to their neighbours through
+# the finite differences and smoothing
+function fg_solve_with_data(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod)
+    fInitial = copy(lambda1_1)
+    gInitial = sqrt.(abs.(lambda2_1))
+    fEstimate = fill(NaN, length(xEvalPoints))
+    gEstimate = fill(NaN, length(xEvalPoints))
+
+    hasData = isfinite.(lambda1_1) .& isfinite.(lambda2_1)
+    for run in true_runs(hasData)
+        length(run) >= 3 || continue # Finite differences need 3 points
+        fEstimate[run], gEstimate[run] = fg_solve(
+            lambda1_1[run],
+            lambda2_1[run],
+            theta,
+            xEvalPoints[run],
+            functionIterateMethod
+        )
+    end
+    return fEstimate, gEstimate, fInitial, gInitial
 end
 
 # Finite difference solution for functions

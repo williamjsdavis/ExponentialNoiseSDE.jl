@@ -53,6 +53,11 @@ function build_moments(observation::Observation, momentSettings::ConditionalMome
         momentSettings.bandwidth,
         momentSettings.kernel
     )
+    noData = [all(isnan, view(moment1, :, j)) for j in eachindex(xEvalPoints)]
+    if any(noData)
+        @warn "No data within the kernel support of $(count(noData)) evaluation point(s); " *
+            "moments, drift and noise are NaN there" xEvalPoints = xEvalPoints[noData]
+    end
 
     # Autocorrelation increments at the same time shifts, for fitting the
     # correlation time
