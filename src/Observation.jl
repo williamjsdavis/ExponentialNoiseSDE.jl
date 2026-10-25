@@ -2,6 +2,12 @@
 
 # MATLAB equivalent: ObservationClass.m
 #NOTE: Only do single observations first
+"""
+    Observation(X, dt)
+
+A time series `X` sampled at a constant time step `dt`. `X` must be finite and
+`dt` positive. `length(observation)` is the number of samples.
+"""
 struct Observation
     X::Array{Float64,1}
     dt::Float64

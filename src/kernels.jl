@@ -6,7 +6,12 @@ abstract type Kernel end
 # Kernels are zero for |x| beyond their support radius (Inf if unbounded)
 support_radius(::Kernel) = Inf
 
-# Epanechnikov, scaled to unit variance (support [-sqrt(5), sqrt(5)])
+"""
+    Epanechnikov()
+
+Epanechnikov kernel scaled to unit variance, `K(u) = 3/(20√5) (5 - u²)` for
+`|u| < √5` and zero otherwise. The default kernel for conditional moments.
+"""
 struct Epanechnikov <: Kernel
 end
 

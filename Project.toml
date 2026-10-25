@@ -1,7 +1,7 @@
 name = "ExponentialNoiseSDE"
 uuid = "e05663f3-40cf-472d-82cb-b388d7231c78"
 authors = ["williamjsdavis <williamjsdavis@berkeley.edu>"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"

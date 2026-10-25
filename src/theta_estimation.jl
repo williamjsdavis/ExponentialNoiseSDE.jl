@@ -11,10 +11,20 @@ end
 # Correlation time (theta) methods
 abstract type ThetaMethod end
 
-# Estimate theta from the autocorrelation increments
+"""
+    EstimateTheta()
+
+Estimate the correlation time θ by a least-squares fit of the basis functions
+r_k(τ, θ) to the autocorrelation increments, for θ between 0 and the largest
+time shift. The default `thetaMethod`.
+"""
 struct EstimateTheta <: ThetaMethod end
 
-# Use a given theta
+"""
+    FixedTheta(θ)
+
+Use a known correlation time `θ ≥ 0` (in units of time) instead of estimating it.
+"""
 struct FixedTheta <: ThetaMethod
     theta::Float64
     function FixedTheta(theta)
