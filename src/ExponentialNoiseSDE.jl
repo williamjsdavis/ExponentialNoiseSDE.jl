@@ -5,6 +5,7 @@ using FFTW: fft, ifft
 using NLopt: Opt, optimize
 using Statistics: mean, var, std, median, quantile
 using Random: rand, AbstractRNG, default_rng
+using Logging: Logging, AbstractLogger, current_logger, with_logger
 
 export Observation
 

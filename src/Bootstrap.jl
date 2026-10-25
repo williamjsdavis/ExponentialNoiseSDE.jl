@@ -16,12 +16,12 @@ Base.@kwdef struct BootstrapSettings
     end
 end
 
-# A single bootstrap model estimate
-struct BootstrapModelEstimate
-    correlationEstimate::Float64
-    driftEstimate::Array{Float64,1}
-    noiseEstimate::Array{Float64,1}
-    modelError
+# Model estimates from each bootstrap resample, one entry (or column) per resample
+struct BootstrapSamples
+    correlationEstimate::Vector{Float64}
+    driftEstimate::Matrix{Float64} # Evaluation points × resamples
+    noiseEstimate::Matrix{Float64} # Evaluation points × resamples
+    meanAbsoluteError::Vector{Float64}
 end
 
 # Exported function
@@ -29,83 +29,89 @@ function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSet
         rng::AbstractRNG = default_rng())
     # A block as long as the series only rotates it, which underestimates
     # the uncertainty
-    originalObs = modelEstimate.conditionalMoments.obervation
-    bootstrapSettings.blockLength < originalObs.N || throw(ArgumentError(
-        "blockLength ($(bootstrapSettings.blockLength)) must be shorter than the series ($(originalObs.N) samples)"))
+    observation = modelEstimate.conditionalMoments.obervation
+    bootstrapSettings.blockLength < observation.N || throw(ArgumentError(
+        "blockLength ($(bootstrapSettings.blockLength)) must be shorter than the series ($(observation.N) samples)"))
 
     @debug "Starting correlated process regression and bootstrap iterations" bootstrapSettings
-
-    # Vary observation, keep the same settings
-    estimate_model_set(obs) = 
-        estimate_model(
-            obs, 
-            modelEstimate.conditionalMoments.momentSettings, 
-            modelEstimate.fitSettings
-        )
-
-    bootsrapEstimates = block_bootstrap(originalObs, estimate_model_set, bootstrapSettings, rng)
-
-    bootstrapStatistics = calculate_sample_statistics(modelEstimate,bootsrapEstimates,bootstrapSettings)
-
-    return bootstrapStatistics
+    samples = bootstrap_samples(
+        observation,
+        modelEstimate.conditionalMoments.momentSettings,
+        modelEstimate.fitSettings,
+        bootstrapSettings,
+        rng
+    )
+    return summarize_bootstrap(modelEstimate, samples, bootstrapSettings)
 end
 
-# Initialize results array and create bootstrap sampler
-function block_bootstrap(obs,estimate_model_set,bootstrapSettings,rng)
-    bootstrapSampler = make_bootstrap_index_sampler(obs.N,bootstrapSettings.blockLength,rng)
-    bootsrapEstimates = Array{BootstrapModelEstimate}(undef, bootstrapSettings.nSamples)
+# Re-estimate the model, with the same settings, on block bootstrap resamples
+# of the observation. Warnings from the fits are reported once per kind.
+function bootstrap_samples(observation, momentSettings, fitSettings, bootstrapSettings, rng)
+    nSamples = bootstrapSettings.nSamples
+    nEvalPoints = momentSettings.nEvalPoints
+    correlationEstimate = Vector{Float64}(undef, nSamples)
+    driftEstimate = Matrix{Float64}(undef, nEvalPoints, nSamples)
+    noiseEstimate = Matrix{Float64}(undef, nEvalPoints, nSamples)
+    meanAbsoluteError = Vector{Float64}(undef, nSamples)
 
     # May be able to parallelize
-    dispatch_bootstrap_calculations!(
-        bootsrapEstimates,
-        obs,
-        estimate_model_set,
-        bootstrapSampler
-    )
-    return bootsrapEstimates
-end
-
-# Calculate all samples and estimates
-function dispatch_bootstrap_calculations!(bootsrapEstimates,obs,estimate_model_set,bootstrapSampler)
-    for i in eachindex(bootsrapEstimates)
-        @debug "Bootstrap sample $i of $(length(bootsrapEstimates))"
-        bootsrapEstimates[i] = make_bootstrap_estimate(obs,estimate_model_set,bootstrapSampler)
+    warningCounter = WarningCounter(current_logger())
+    with_logger(warningCounter) do
+        for i in 1:nSamples
+            @debug "Bootstrap sample $i of $nSamples"
+            indices = block_bootstrap_indices(rng, observation.N, bootstrapSettings.blockLength)
+            estimate = estimate_model(
+                Observation(observation.X[indices], observation.dt),
+                momentSettings,
+                fitSettings
+            )
+            correlationEstimate[i] = estimate.correlationEstimate
+            driftEstimate[:,i] = estimate.driftEstimate
+            noiseEstimate[:,i] = estimate.noiseEstimate
+            meanAbsoluteError[i] = estimate.modelError.meanAbsoluteError
+        end
     end
+    for (id, count) in warningCounter.counts
+        @warn "$count of $nSamples bootstrap fits: $(warningCounter.messages[id])"
+    end
+
+    return BootstrapSamples(correlationEstimate, driftEstimate, noiseEstimate, meanAbsoluteError)
 end
 
-# Create a single bootstrap sample and model estimate
-function make_bootstrap_estimate(obs,estimate_model_set,bootstrapSampler)
-    bootstrapObs = make_bootstrap_sample(obs,bootstrapSampler)
-    bootstrapModelEstimate = estimate_model_set(bootstrapObs)
-    return BootstrapModelEstimate(
-        bootstrapModelEstimate.correlationEstimate,
-        bootstrapModelEstimate.driftEstimate,
-        bootstrapModelEstimate.noiseEstimate,
-        bootstrapModelEstimate.modelError
-    )
+# Indices of a circular block bootstrap resample of 1:N: blocks of blockLength
+# consecutive indices from random starts, wrapping from N back to 1, joined and
+# cut to length N
+#NOTE: The joins between blocks create increments that are not in the series
+function block_bootstrap_indices(rng, N, blockLength)
+    blockStarts = rand(rng, 1:N, ceil(Int, N/blockLength))
+    indices = [mod(start + k - 1, N) + 1 for start in blockStarts for k in 0:blockLength-1]
+    return indices[1:N]
 end
 
-# Create a bootstrap observation
-function make_bootstrap_sample(obs,bootstrapSampler)
-    # Code here
-    X_boostrap = obs.X[bootstrapSampler()]
-    return Observation(
-        X_boostrap,
-        obs.dt
-    )
+# Logger that counts warnings by the statement that logged them, so warnings
+# repeated across bootstrap fits can be reported once. Other messages are
+# passed to the parent logger.
+struct WarningCounter <: AbstractLogger
+    parent::AbstractLogger
+    counts::Dict{Any,Int}
+    messages::Dict{Any,String}
 end
+WarningCounter(parent) = WarningCounter(parent, Dict{Any,Int}(), Dict{Any,String}())
 
-# Create a bootstrap sampler
-#NOTE: Terrible anon. function-based implementation...
-function make_bootstrap_index_sampler(N,blockLength,rng)
-    rdraw2() = rand(rng,1:N,ceil(Int, N/blockLength))
-    drawin(i) = i:(i+blockLength-1)
-    moddraw(i) = mod(i-1,N) + 1
-    drawN(i) = moddraw.(i[1:N])
-    allin(i) = reduce(vcat,broadcast(collect∘drawin,i))
-    bsdrawi() = drawN(allin(rdraw2()))
-    return bsdrawi
+is_warning(level) = Logging.Warn <= level < Logging.Error
+
+Logging.min_enabled_level(counter::WarningCounter) =
+    min(Logging.Warn, Logging.min_enabled_level(counter.parent))
+Logging.shouldlog(counter::WarningCounter, level, args...) =
+    is_warning(level) || Logging.shouldlog(counter.parent, level, args...)
+Logging.catch_exceptions(counter::WarningCounter) = Logging.catch_exceptions(counter.parent)
+
+function Logging.handle_message(counter::WarningCounter, level, message, _module, group, id, file, line; kwargs...)
+    if is_warning(level)
+        counter.counts[id] = get(counter.counts, id, 0) + 1
+        get!(counter.messages, id, string(message))
+    else
+        Logging.handle_message(counter.parent, level, message, _module, group, id, file, line; kwargs...)
+    end
+    return nothing
 end
-
-
-
