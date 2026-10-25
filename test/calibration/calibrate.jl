@@ -42,6 +42,19 @@ println("  g max abs error  : median $(round(median(gErr), sigdigits=3)), 99% $(
 # Seed 1 is the seed used by test/scientific.jl
 println("  test seed 1      : θ $(round(θErr[1], sigdigits=3)), f $(round(fErr[1], sigdigits=3)), g $(round(gErr[1], sigdigits=3))")
 
+# Correlation time from every other lag
+θErrSparse = Float64[]
+for seed in 1:nSeeds
+    X = try
+        simulate_process(StableRNG(seed), f, g, θTRUE, DT, N)
+    catch e
+        e isa DomainError || rethrow()
+        continue
+    end
+    push!(θErrSparse, abs(theta_of(fit_model(X, DT; lags = 2:2:30)) - θTRUE)/θTRUE)
+end
+println("  θ relative error, lags 2:2:30: median $(round(median(θErrSparse), sigdigits=3)), 99% $(round(q(θErrSparse), sigdigits=3)) -> rtol $(round(1.5q(θErrSparse), sigdigits=2)); seed 1: $(round(θErrSparse[1], sigdigits=3))")
+
 # Linear process with constant noise: cannot diverge, and has the analytic
 # stationary variance Var X = g²/(2a(1 + aθ)) (checks the η normalisation)
 const A = 2.5

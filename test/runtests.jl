@@ -20,6 +20,7 @@ include("scientific.jl")
 @testset "ExponentialNoiseSDE.jl" begin
     ## Utilities and statistics
     test_utility_statistics()
+    test_time_shift_validation()
 
     ## Small dataset
     small_data_test()
