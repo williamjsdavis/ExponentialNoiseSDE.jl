@@ -2,6 +2,15 @@
 # MATLAB equivalent: SPbootstrapClass.m
 
 # MATLAB equivalent: BootstrapOptionsClass.m
+"""
+    BootstrapSettings(; blockLength=500, nSamples=20, biasCorrection=true)
+
+Settings for the circular block bootstrap: resamples are made of blocks of
+`blockLength` consecutive samples (shorter than the series), and the model is
+re-estimated on `nSamples ≥ 2` resamples. With `biasCorrection`, the 95%
+intervals are computed from the resampled estimates shifted so their mean is
+the original estimate.
+"""
 Base.@kwdef struct BootstrapSettings
     blockLength::Int64 = 500
     nSamples::Int64 = 20
@@ -24,7 +33,20 @@ struct BootstrapSamples
     meanAbsoluteError::Vector{Float64}
 end
 
-# Exported function
+"""
+    estimate_bootstrap_statistics(modelEstimate::ModelEstimate, bootstrapSettings::BootstrapSettings;
+        rng=Random.default_rng()) -> BootstrapStatistics
+
+Uncertainties of a model estimate from a circular block bootstrap: re-estimate
+the model, with the same settings, on resamples of its observation, and
+summarize. The result holds summaries ([`correlation_time`](@ref),
+[`drift`](@ref), [`noise`](@ref)) and the resampled estimates (`samples`).
+Pass an `rng` for reproducible results. Warnings from the resample fits are
+reported once per kind, with a count.
+
+Joining blocks creates increments that are not in the original series, which
+biases the resampled estimates (see the documentation's known limitations).
+"""
 function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSettings::BootstrapSettings;
         rng::AbstractRNG = default_rng())
     # A block as long as the series only rotates it, which underestimates

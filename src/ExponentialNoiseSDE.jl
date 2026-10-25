@@ -1,6 +1,22 @@
+"""
+    ExponentialNoiseSDE
+
+Estimate a stochastic differential equation driven by exponentially correlated
+(Ornstein-Uhlenbeck) noise from a sampled time series,
+
+    dX/dt = f(X) + g(X) η(t),    dη = -η/θ dt + (1/θ) dW,
+
+where f is the drift, g the noise amplitude and θ the correlation time of the
+noise. η is normalised so that <η(t)η(s)> = exp(-|t-s|/θ)/(2θ): as θ → 0 it
+becomes white noise and the model becomes dX = f dt + g ∘ dW (Stratonovich).
+
+The method (Lehle & Peinke, 2018) estimates conditional moments of the
+increments by kernel regression ([`build_moments`](@ref)), fits θ to the
+autocorrelation increments, and solves for f and g ([`estimate_model`](@ref)).
+Uncertainties come from a block bootstrap ([`estimate_bootstrap_statistics`](@ref)).
+"""
 module ExponentialNoiseSDE
 
-#TODO: update code to use mean()
 using FFTW: fft, ifft
 using NLopt: Opt, optimize
 using Statistics: mean, var, std, median, quantile

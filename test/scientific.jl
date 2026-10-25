@@ -28,6 +28,15 @@ function scientific_tests()
         @test maximum(abs, noise(model)[inner] .- example_noise.(x[inner])) < 0.15
     end
 
+    # The example data were simulated from the same model (test/data/README.md),
+    # so the same tolerances apply
+    @testset "Recovery, example data" begin
+        exampleModel = fit_model(readdlm(datafile("exampleData.txt"))[:], DT_SIM)
+        @test isapprox(correlation_time(exampleModel), θ_TRUE; rtol=0.32)
+        @test maximum(abs, drift(exampleModel)[inner] .- example_drift.(x[inner])) < 0.73
+        @test maximum(abs, noise(exampleModel)[inner] .- example_noise.(x[inner])) < 0.15
+    end
+
     @testset "Consistency" begin
         spread(n) = std([correlation_time(fit_model(
             simulate_process(StableRNG(s), linear_drift, constant_noise, θ_TRUE, DT_SIM, n), DT_SIM))

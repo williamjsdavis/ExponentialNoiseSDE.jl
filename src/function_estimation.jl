@@ -3,9 +3,15 @@
 # Function estimation methods
 abstract type FunctionIterateMethod end
 
-# Fixed-point iteration with finite-difference gradients. Stops when the
-# relative change in both f and g from the previous iteration is below
-# functionConvergenceValue, or after functionIterMax iterations.
+"""
+    FiniteDiff(; functionConvergenceValue=1E-4, functionIterMax=20)
+
+Solve for the drift f and noise g by fixed-point iteration, with
+finite-difference gradients on the evaluation points. Stops when the relative
+change of both f and g from the previous iteration is below
+`functionConvergenceValue`, or after `functionIterMax` iterations (with a
+warning). Equivalent to `SmoothedFiniteDiff(nPointSmooth=1)`.
+"""
 Base.@kwdef struct FiniteDiff <: FunctionIterateMethod
     functionConvergenceValue::Float64 = 1E-4 # Relative change
     functionIterMax::Int64 = 20
@@ -15,8 +21,13 @@ Base.@kwdef struct FiniteDiff <: FunctionIterateMethod
     end
 end
 
-# As FiniteDiff, with an nPointSmooth-point moving mean applied to the
-# functions and their gradients in each iteration
+"""
+    SmoothedFiniteDiff(; nPointSmooth=3, functionConvergenceValue=1E-4, functionIterMax=20)
+
+As [`FiniteDiff`](@ref), with an `nPointSmooth`-point moving mean applied to
+the functions and their gradients in each iteration. The default
+`functionIterateMethod`.
+"""
 Base.@kwdef struct SmoothedFiniteDiff <: FunctionIterateMethod
     nPointSmooth::Int64 = 3
     functionConvergenceValue::Float64 = 1E-4 # Relative change

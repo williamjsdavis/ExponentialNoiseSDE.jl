@@ -2,6 +2,19 @@
 
 # MATLAB equivalent: MomentOptionsClass.m
 #TODO: Add optimal bandwidth selection
+"""
+    ConditionalMomentSettings(; timeShiftSamplePoints, nEvalPoints, evalLims, bandwidth, kernel=Epanechnikov())
+    ConditionalMomentSettings(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
+
+Settings for estimating conditional moments of the increments `X(t+τ) - X(t)`.
+
+- `timeShiftSamplePoints`: lags τ/dt in samples; at least 4, positive and
+  strictly increasing (e.g. `1:15`)
+- `nEvalPoints`: number of evaluation points x (at least 3), evenly spaced over
+- `evalLims`: `(xmin, xmax)`, with `xmin < xmax`
+- `bandwidth`: kernel bandwidth h, in units of x
+- `kernel`: a `Kernel`, scaled by the bandwidth
+"""
 Base.@kwdef struct ConditionalMomentSettings
     timeShiftSamplePoints::Array{Int64,1}
     nEvalPoints::Int64
@@ -38,6 +51,20 @@ end
 
 # MATLAB equivalent: MomentClass.m
 #Note: Only first 2 moments
+"""
+    ConditionalMoments
+
+Kernel-regression estimates of the conditional moments of the increments
+ΔX = X(t+τ) - X(t), made by [`build_moments`](@ref):
+
+- `moment1[i,j]`: conditional mean E[ΔX | X(t) = x_j] for time shift τ_i
+- `moment2[i,j]`: conditional *variance* Var[ΔX | X(t) = x_j]
+- `xEvalPoints`: the evaluation points x_j
+- `timeShifts`: the time shifts τ_i, in units of time
+- `dA`: autocorrelation increments at the time shifts, used to fit θ
+
+Moments are NaN at evaluation points with no data within the kernel support.
+"""
 struct ConditionalMoments
 #    nCounts::Array{Int64,2}
     moment1::Array{Float64,2}
@@ -55,6 +82,14 @@ Base.show(io::IO, conditionalMoments::ConditionalMoments) = print(io,
     "[$(first(conditionalMoments.xEvalPoints)), $(last(conditionalMoments.xEvalPoints))])")
 
 # MATLAB equivalent: buildMoments.m
+"""
+    build_moments(observation::Observation, momentSettings::ConditionalMomentSettings) -> ConditionalMoments
+
+Estimate the conditional moments of the increments of `observation`, and its
+autocorrelation increments, at the lags and evaluation points in
+`momentSettings`. Warns if some evaluation points have no data within the
+kernel support.
+"""
 function build_moments(observation::Observation, momentSettings::ConditionalMomentSettings)
     maximumLag = maximum(momentSettings.timeShiftSamplePoints)
     length(observation) > maximumLag || throw(ArgumentError(

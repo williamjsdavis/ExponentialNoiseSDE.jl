@@ -1,12 +1,28 @@
 # Estimating SDE model (drift and noise functions + correlation time)
 
 # MATLAB equivalent: FitOptionsClass.m
+"""
+    ModelEstimateSettings(; thetaMethod=EstimateTheta(), functionIterateMethod=SmoothedFiniteDiff())
+
+How to estimate the model: the correlation time ([`EstimateTheta`](@ref) or
+[`FixedTheta`](@ref)), and the drift and noise solver ([`SmoothedFiniteDiff`](@ref)
+or [`FiniteDiff`](@ref)).
+"""
 Base.@kwdef struct ModelEstimateSettings
     thetaMethod::ThetaMethod = EstimateTheta()
     functionIterateMethod::FunctionIterateMethod = SmoothedFiniteDiff()
 end
 
 # MATLAB equivalent: SPmodelClass.m
+"""
+    ModelEstimate
+
+An estimated model, from [`estimate_model`](@ref). Use [`correlation_time`](@ref),
+[`drift`](@ref), [`noise`](@ref) and [`eval_points`](@ref) for the estimates.
+`functionDiagnostics` records the drift and noise iteration (iterations,
+convergence, negative squared noise), and `modelError` the mean absolute error
+of the fitted moments.
+"""
 struct ModelEstimate
     correlationEstimate::Float64
     driftEstimate::Array{Float64,1}
@@ -21,13 +37,48 @@ struct ModelEstimate
     fitSettings::ModelEstimateSettings
 end
 
-# Estimates of the correlation time, drift and noise, and the evaluation points
+"""
+    correlation_time(modelEstimate::ModelEstimate) -> Float64
+    correlation_time(bootstrapStatistics) -> BootstrapSummary
+
+The correlation time θ of the noise, in units of time; for bootstrap
+statistics, a summary (`mean`, `median`, `std`, `lower95`, `upper95`).
+"""
 correlation_time(modelEstimate::ModelEstimate) = modelEstimate.correlationEstimate
+
+"""
+    drift(modelEstimate::ModelEstimate) -> Vector{Float64}
+    drift(bootstrapStatistics) -> BootstrapSummary
+
+The drift f at the evaluation points ([`eval_points`](@ref)), in units of x per
+unit time; for bootstrap statistics, a summary at each point.
+"""
 drift(modelEstimate::ModelEstimate) = modelEstimate.driftEstimate
+
+"""
+    noise(modelEstimate::ModelEstimate) -> Vector{Float64}
+    noise(bootstrapStatistics) -> BootstrapSummary
+
+The noise amplitude g at the evaluation points, in units of x per square root
+of unit time; for bootstrap statistics, a summary at each point.
+"""
 noise(modelEstimate::ModelEstimate) = modelEstimate.noiseEstimate
+
+"""
+    eval_points(modelEstimate::ModelEstimate) -> Vector{Float64}
+
+The evaluation points x at which the drift and noise are estimated.
+"""
 eval_points(modelEstimate::ModelEstimate) = modelEstimate.conditionalMoments.xEvalPoints
 
 # MATLAB equivalent: estimateSPmodel.m
+"""
+    estimate_model(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings) -> ModelEstimate
+    estimate_model(observation::Observation, momentSettings, fitSettings) -> ModelEstimate
+
+Estimate the correlation time θ, drift f and noise g from conditional moments
+(or directly from an observation, building the moments first).
+"""
 function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings)
     # Estimate correlation time (theta)
     correlationEstimate, thetaProperties = estimate_theta(conditionalMoments, fitSettings.thetaMethod)
