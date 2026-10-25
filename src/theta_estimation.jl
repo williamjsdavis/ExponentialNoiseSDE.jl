@@ -8,47 +8,53 @@ struct ThetaProperties
     lambdaStar::Array{Float64,1}
 end
 
-# Estimating theta
-function estimate_theta(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings)
-    
-    maximumLag = maximum(conditionalMoments.momentSettings.timeShiftSamplePoints)
-    dt = conditionalMoments.obervation.dt
+# Correlation time (theta) methods
+abstract type ThetaMethod end
 
-    # This can be done better with multiple dispatch
-    if fitSettings.fixThetaFlag
-        # Fixed theta method
-        thetaEst, thetaProperties = theta_fixed(
-            conditionalMoments.obervation.X,
-            dt,
-            maximumLag,
-            fitSettings
-        )
-    else
-        # Estimating theta
-        maximumTheta = maximumLag*dt
-        thetaEst, thetaProperties = theta_search(
-            conditionalMoments.obervation.X,
-            dt,
-            maximumLag,
-            maximumTheta,
-            fitSettings.thetaConvergenceValue,
-            fitSettings.displayOutputFlag
-        )
+"""
+    EstimateTheta()
+
+Estimate the correlation time θ by a least-squares fit of the basis functions
+r_k(τ, θ) to the autocorrelation increments, for θ between 0 and the largest
+time shift. The default `thetaMethod`.
+"""
+struct EstimateTheta <: ThetaMethod end
+
+"""
+    FixedTheta(θ)
+
+Use a known correlation time `θ ≥ 0` (in units of time) instead of estimating it.
+"""
+struct FixedTheta <: ThetaMethod
+    theta::Float64
+    function FixedTheta(theta)
+        (theta >= 0 && isfinite(theta)) || throw(ArgumentError(
+            "the fixed correlation time must be non-negative and finite, got $theta"))
+        return new(theta)
     end
-
-    return thetaEst, thetaProperties
 end
 
-function theta_fixed(X,dt,nuMax,fitSettings)
-    # Get set theta value
-    thetaEst = fitSettings.fixThetaValue
+# Estimating theta, from the autocorrelation increments at the moment time shifts
+function estimate_theta(conditionalMoments::ConditionalMoments, ::EstimateTheta)
+    return theta_search(
+        conditionalMoments.dA,
+        conditionalMoments.timeShifts,
+        maximum(conditionalMoments.momentSettings.timeShiftSamplePoints)
+    )
+end
 
-    # Autocorrelation (single data)
-    dA = autocorr_increment(X,nuMax)
+function estimate_theta(conditionalMoments::ConditionalMoments, thetaMethod::FixedTheta)
+    return theta_fixed(
+        conditionalMoments.dA,
+        conditionalMoments.timeShifts,
+        maximum(conditionalMoments.momentSettings.timeShiftSamplePoints),
+        thetaMethod.theta
+    )
+end
 
+function theta_fixed(dA,timeShifts,nuMax,thetaEst)
     # R matrix and lambda vector
-    rNuMatrix = form_r_matrix(dt,nuMax) # Function: real -> matrix
-    rMatrix = rNuMatrix(thetaEst) # Returns r[tau,theta] matrix
+    rMatrix = form_r_matrix(timeShifts,thetaEst) # Returns r[tau,theta] matrix
     lambdaStar = rMatrix \ dA
 
     return thetaEst, ThetaProperties(
@@ -59,42 +65,20 @@ function theta_fixed(X,dt,nuMax,fitSettings)
     )
 end
 
-function theta_search(X,dt,nuMax,thetaMax,thetaConvergenceValue,displayOutputFlag)
-    # Autocorrelation (single data)
-    dA = autocorr_increment(X,nuMax)
-
-    # First search
-    thetaEstInitial, rNuMatrix, _ = theta_basis_function_fit(
+#NOTE: MATLAB secn-PR follows this with a second search over 1:ceil(sqrt(theta)/dt)
+# time shifts. That rule depends on the units of time, so it is not used here.
+function theta_search(dA,timeShifts,nuMax)
+    # Search over all time shifts, for theta up to the largest time shift
+    thetaEst, lambdaStar = theta_basis_function_fit(
         dA,
-        dt,
-        nuMax,
-        thetaMax,
-        thetaConvergenceValue
-    )
-    # New maximum tau
-    newNuMax = ceil(Int64, sqrt(thetaEstInitial)/dt)
-    if newNuMax > nuMax
-        if displayOutputFlag
-            println("Calculating new ACF")
-        end
-        newNuMax = nuMax
-        dA = autocorr_increment(X,newNuMax)
-    end
-
-    # Second search
-    newThetaMax = newNuMax*dt
-    thetaEstNew, _, lambdaStar = theta_basis_function_fit(
-        dA[1:newNuMax],
-        dt,
-        newNuMax,
-        newThetaMax,
-        thetaConvergenceValue
+        timeShifts,
+        maximum(timeShifts)
     )
 
     # R matrix
-    rMatrix = rNuMatrix(thetaEstNew) # Returns r[tau,theta] matrix
+    rMatrix = form_r_matrix(timeShifts,thetaEst) # Returns r[tau,theta] matrix
 
-    return thetaEstNew, ThetaProperties(
+    return thetaEst, ThetaProperties(
         nuMax,
         rMatrix,
         dA,
@@ -103,38 +87,42 @@ function theta_search(X,dt,nuMax,thetaMax,thetaConvergenceValue,displayOutputFla
 end
 
 #NOTE: Make these anon functions into regular functions?
-function theta_basis_function_fit(dA,dt,nuMax,thetaMax,thetaConvergenceValue)
+function theta_basis_function_fit(dA,timeShifts,thetaMax)
     # Objective function from matrix
-    rNuMatrix = form_r_matrix(dt,nuMax)
-    lambdaFunc = theta_c -> rNuMatrix(theta_c) \ dA
-    funcValue = theta_c -> sum((dA .- (rNuMatrix(theta_c) * lambdaFunc(theta_c))).^2)
+    lambdaFunc = theta_c -> form_r_matrix(timeShifts,theta_c) \ dA
+    funcValue = theta_c -> sum((dA .- (form_r_matrix(timeShifts,theta_c) * lambdaFunc(theta_c))).^2)
 
-    # Line search using golden section search and parabolic interpolation
-    # Original MATLAB: thetaStar = fminbnd(funcValue,0,thetaMax);
-    objective_function(x,g) = funcValue(x[1])
+    # Bounded line search, MATLAB original: thetaStar = fminbnd(funcValue,0,thetaMax);
+    # Searches over u = theta/thetaMax in [0,1], so the tolerance is independent
+    # of the units of time
+    objective_function(u,g) = funcValue(u[1]*thetaMax)
     opt = Opt(:LN_COBYLA, 1)
     opt.lower_bounds = 0.0
-    opt.upper_bounds = thetaMax
+    opt.upper_bounds = 1.0
     opt.xtol_abs = 1E-12
+    opt.maxeval = 10_000
     opt.min_objective = objective_function
-    funcMin, xMin, retval = optimize(opt, [thetaMax])
-    thetaEst = xMin[1]
+    funcMin, uMin, retval = optimize(opt, [1.0])
+    if retval ∉ (:SUCCESS, :FTOL_REACHED, :XTOL_REACHED)
+        @warn "Correlation time search stopped early" retval
+    end
+    thetaEst = uMin[1]*thetaMax
     # Best fit lambda vector
     lambdaStar = lambdaFunc(thetaEst)
 
-    return thetaEst, rNuMatrix, lambdaStar
+    return thetaEst, lambdaStar
 end
 
-function form_r_matrix(dt,nuMax)
-    # Basis functions
-    r1(tau,theta) = tau - theta*(1 - exp(-tau/theta))
-    r2(tau,theta) = tau.^2/2 - theta*r1(tau,theta)
-    r3(tau,theta) = tau.^3/6 - theta*r2(tau,theta)
-    rArray(tau,theta) = [r1(tau,theta),r2(tau,theta),r3(tau,theta)] # ?
-    
-    # Functions r matrix (reducing dependencies, new method)
-    nu = 1:nuMax
-    tau_nu = nu*dt
-    rNuMatrix = theta -> mapreduce(permutedims, vcat, rArray.(tau_nu,theta))
-    return rNuMatrix
+# Matrix of basis functions r_k(tau,theta), one row per time shift tau
+function form_r_matrix(timeShifts,theta)
+    rMatrix = Matrix{Float64}(undef, length(timeShifts), 3)
+    for (i, tau) in enumerate(timeShifts)
+        r1 = tau - theta*(1 - exp(-tau/theta))
+        r2 = tau^2/2 - theta*r1
+        r3 = tau^3/6 - theta*r2
+        rMatrix[i,1] = r1
+        rMatrix[i,2] = r2
+        rMatrix[i,3] = r3
+    end
+    return rMatrix
 end
