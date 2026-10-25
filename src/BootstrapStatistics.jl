@@ -20,7 +20,9 @@ function generate_statistics_dict(varMean,varMedian,varStd,varPrc)
     )
 end
 
-# Quantiles, or NaN when there are no samples (no resample had data at a point)
+# Median and quantiles, or NaN when there are no samples (no resample had data
+# at a point)
+median_or_nan(samples) = isempty(samples) ? NaN : median(samples)
 quantile_or_nan(samples, p) = isempty(samples) ? fill(NaN, length(p)) : quantile(samples, p)
 
 # Calculate sample statistics from bootstrap samples
@@ -46,8 +48,8 @@ function calculate_sample_statistics(
     # Median
     corrMedian = median(corrSamples)
     errorMedian = median(errorSamples)
-    driftMedian = broadcast(i->mean(get_drift_samples(i)),1:nEvalPoints)
-    noiseMedian = broadcast(i->mean(get_noise_samples(i)),1:nEvalPoints)
+    driftMedian = broadcast(i->median_or_nan(get_drift_samples(i)),1:nEvalPoints)
+    noiseMedian = broadcast(i->median_or_nan(get_noise_samples(i)),1:nEvalPoints)
     
     # Standard deviations
     corrStd = std(corrSamples)

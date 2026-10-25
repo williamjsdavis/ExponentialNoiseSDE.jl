@@ -369,3 +369,29 @@ function test_function_iteration()
         @test_throws ArgumentError FiniteDiff(functionConvergenceValue=-1.0)
     end
 end
+
+# Test bootstrap summary statistics on hand-made samples
+function test_bootstrap_statistics()
+    @testset "Bootstrap statistics" begin
+        # A model estimate, for the evaluation grid and original estimates
+        X = readdlm(datafile("exampleData.txt"))[1:5000]
+        modelEstimate = estimate_model(Observation(X, 0.0050),
+            ConditionalMomentSettings(collect(1:6), 3, (-0.2,0.2), Epanechnikov(), 0.1),
+            ModelEstimateSettings())
+
+        # Skewed samples, with mean 2.2 and median 0
+        sampleValues = [0.0, 0.0, 0.0, 1.0, 10.0]
+        modelError = ExponentialNoiseSDE.ModelError(0.0, 0.0, 0.0)
+        samples = [ExponentialNoiseSDE.BootstrapModelEstimate(v, fill(v, 3), fill(2v, 3), modelError)
+            for v in sampleValues]
+        statistics = ExponentialNoiseSDE.calculate_sample_statistics(modelEstimate, samples,
+            BootstrapSettings(biasCorrection=false, displayOutputFlag=false))
+
+        @test statistics.correlationEstimate[:median] == 0.0
+        @test statistics.correlationEstimate[:mean] ≈ 2.2
+        @test statistics.driftEstimate[:median] == zeros(3)
+        @test statistics.driftEstimate[:mean] ≈ fill(2.2, 3)
+        @test statistics.noiseEstimate[:median] == zeros(3)
+        @test statistics.noiseEstimate[:mean] ≈ fill(4.4, 3)
+    end
+end

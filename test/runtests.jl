@@ -28,6 +28,7 @@ include("scientific.jl")
     test_kernels()
     test_points_without_data()
     test_function_iteration()
+    test_bootstrap_statistics()
 
     ## Small dataset
     small_data_test()
