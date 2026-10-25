@@ -21,6 +21,8 @@ export estimate_model
 export BootstrapSettings
 export estimate_bootstrap_statistics
 
+export correlation_time, drift, noise, eval_points
+
 include("utils.jl")
 
 include("Observation.jl")

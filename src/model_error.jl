@@ -1,9 +1,9 @@
 ## Quantify errors of model fit
 
 struct ModelError
-    meanAbsoluteErrorMoment1
-    meanAbsoluteErrorMoment2
-    meanAbsoluteError
+    meanAbsoluteErrorMoment1::Float64
+    meanAbsoluteErrorMoment2::Float64
+    meanAbsoluteError::Float64
 end
 
 function mean_fit_error(

@@ -21,6 +21,18 @@ struct BootstrapStatistics
     bootstrapSettings::BootstrapSettings
 end
 
+# Summaries of the correlation time, drift and noise
+correlation_time(bootstrapStatistics::BootstrapStatistics) = bootstrapStatistics.correlationEstimate
+drift(bootstrapStatistics::BootstrapStatistics) = bootstrapStatistics.driftEstimate
+noise(bootstrapStatistics::BootstrapStatistics) = bootstrapStatistics.noiseEstimate
+
+function Base.show(io::IO, bootstrapStatistics::BootstrapStatistics)
+    θ = correlation_time(bootstrapStatistics)
+    r(x) = round(x, sigdigits=4)
+    print(io, "BootstrapStatistics($(length(bootstrapStatistics.samples.correlationEstimate)) resamples, ",
+        "θ = $(r(θ.mean)), 95% interval [$(r(θ.lower95)), $(r(θ.upper95))])")
+end
+
 # Summarize the samples of each estimate
 function summarize_bootstrap(
         modelEstimate::ModelEstimate,

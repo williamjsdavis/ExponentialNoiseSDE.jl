@@ -14,17 +14,23 @@ struct ModelEstimate
     driftInitial::Array{Float64,1}
     noiseInitial::Array{Float64,1}
     functionDiagnostics::FunctionIterationDiagnostics
-    modelError
+    modelError::ModelError
     conditionalMoments::ConditionalMoments
-    thetaProperties
-    lambdaProperties
+    thetaProperties::ThetaProperties
+    lambdaProperties::LambdaProperties
     fitSettings::ModelEstimateSettings
 end
+
+# Estimates of the correlation time, drift and noise, and the evaluation points
+correlation_time(modelEstimate::ModelEstimate) = modelEstimate.correlationEstimate
+drift(modelEstimate::ModelEstimate) = modelEstimate.driftEstimate
+noise(modelEstimate::ModelEstimate) = modelEstimate.noiseEstimate
+eval_points(modelEstimate::ModelEstimate) = modelEstimate.conditionalMoments.xEvalPoints
 
 # MATLAB equivalent: estimateSPmodel.m
 function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings)
     # Estimate correlation time (theta)
-    thetaEst, thetaProperties = estimate_theta(conditionalMoments, fitSettings.thetaMethod)
+    correlationEstimate, thetaProperties = estimate_theta(conditionalMoments, fitSettings.thetaMethod)
 
     # Estimate drift and noise properties
     lambdaProperties = lambda_search_linear(
@@ -36,10 +42,10 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
     # Estimate drift and noise functions
     lambda1_1 = lambdaProperties.lambda1Est[1,:] # Array of lambda^(1)_1
     lambda2_1 = lambdaProperties.lambda2Est[1,:] # Array of lambda^(2)_1
-    fEstimate, gEstimate, fInitial, gInitial, functionDiagnostics = fg_solve_with_data(
+    driftEstimate, noiseEstimate, driftInitial, noiseInitial, functionDiagnostics = fg_solve_with_data(
         lambda1_1,
         lambda2_1,
-        thetaEst,
+        correlationEstimate,
         conditionalMoments.xEvalPoints,
         fitSettings.functionIterateMethod
     )
@@ -51,11 +57,6 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
         lambdaProperties
     )
 
-    correlationEstimate = thetaEst
-    driftEstimate = fEstimate
-    noiseEstimate = gEstimate
-    driftInitial = fInitial
-    noiseInitial = gInitial
     return ModelEstimate(
         correlationEstimate,
         driftEstimate,
@@ -79,4 +80,26 @@ function estimate_model(observation,momentSettings,fitSettings)
     # Estimate model
     modelEstimate = estimate_model(conditionalMoments, fitSettings)
     return modelEstimate
+end
+
+Base.show(io::IO, modelEstimate::ModelEstimate) = print(io,
+    "ModelEstimate(θ = $(round(correlation_time(modelEstimate), sigdigits=4)), ",
+    "$(length(eval_points(modelEstimate))) evaluation points)")
+
+function Base.show(io::IO, ::MIME"text/plain", modelEstimate::ModelEstimate)
+    x = eval_points(modelEstimate)
+    diagnostics = modelEstimate.functionDiagnostics
+    function finiteRange(v)
+        finiteValues = filter(isfinite, v)
+        isempty(finiteValues) && return (NaN, NaN)
+        return round.(extrema(finiteValues), sigdigits=4)
+    end
+    println(io, "ModelEstimate")
+    println(io, "  correlation time θ: ", round(correlation_time(modelEstimate), sigdigits=6))
+    println(io, "  evaluation points:  ", length(x), " in [", first(x), ", ", last(x), "]")
+    println(io, "  drift range:        ", finiteRange(drift(modelEstimate)))
+    println(io, "  noise range:        ", finiteRange(noise(modelEstimate)))
+    println(io, "  iteration:          ", diagnostics.converged ? "converged" : "not converged",
+        " in ", diagnostics.iterations, " iteration(s)")
+    print(io, "  mean fit error:     ", round(modelEstimate.modelError.meanAbsoluteError, sigdigits=4))
 end

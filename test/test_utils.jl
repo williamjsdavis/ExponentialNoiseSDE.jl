@@ -77,7 +77,7 @@ function small_data_test()
     )
     @testset "Observation attributes" begin
         @test obs.dt == 0.0050
-        @test obs.N == N_data
+        @test length(obs) == N_data
         @test size(obs.X) == (N_data,)
     end
 
@@ -437,8 +437,7 @@ end
 function test_input_validation()
     @testset "Input validation" begin
         X = readdlm(datafile("exampleData.txt"))[1:2000]
-        @test Observation(X, 0.0050).N == 2000
-        @test_throws ArgumentError Observation(X, 0.0050, 10)
+        @test length(Observation(X, 0.0050)) == 2000
         @test_throws ArgumentError Observation(X, -0.0050)
         @test_throws ArgumentError Observation(X, 0.0)
         @test_throws ArgumentError Observation(X, Inf)
@@ -496,5 +495,34 @@ function test_settings_strategies()
             read(path, String)
         end
         @test isempty(printed)
+    end
+end
+
+# Test accessors and printing
+function test_api()
+    @testset "Accessors and printing" begin
+        X = readdlm(datafile("exampleData.txt"))[:]
+        observation = Observation(X, 0.0050)
+        conditionalMoments = build_moments(observation, ConditionalMomentSettings(
+            timeShiftSamplePoints=1:15, nEvalPoints=20, evalLims=(-1.0,1.0), bandwidth=0.1))
+        modelEstimate = estimate_model(conditionalMoments, ModelEstimateSettings())
+        bootstrapStatistics = estimate_bootstrap_statistics(modelEstimate, BootstrapSettings(nSamples=3);
+            rng=StableRNG(BOOTSTRAP_SEED))
+
+        @test correlation_time(modelEstimate) == modelEstimate.correlationEstimate
+        @test drift(modelEstimate) == modelEstimate.driftEstimate
+        @test noise(modelEstimate) == modelEstimate.noiseEstimate
+        @test eval_points(modelEstimate) == conditionalMoments.xEvalPoints
+        @test correlation_time(bootstrapStatistics) === bootstrapStatistics.correlationEstimate
+        @test drift(bootstrapStatistics).mean == bootstrapStatistics.driftEstimate.mean
+        @test noise(bootstrapStatistics).upper95 == bootstrapStatistics.noiseEstimate.upper95
+
+        # Short summaries rather than every array
+        for object in (observation, conditionalMoments, modelEstimate, bootstrapStatistics)
+            @test length(sprint(show, object)) < 200
+            @test length(sprint(show, MIME"text/plain"(), object)) < 2000
+        end
+        @test occursin("θ = ", sprint(show, modelEstimate))
+        @test occursin("converged", sprint(show, MIME"text/plain"(), modelEstimate))
     end
 end
