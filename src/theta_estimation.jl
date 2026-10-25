@@ -8,45 +8,36 @@ struct ThetaProperties
     lambdaStar::Array{Float64,1}
 end
 
-# Estimating theta
+# Estimating theta, from the autocorrelation increments at the moment time shifts
 function estimate_theta(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings)
-    
+    timeShifts = conditionalMoments.timeShifts
+    dA = conditionalMoments.dA
     maximumLag = maximum(conditionalMoments.momentSettings.timeShiftSamplePoints)
-    dt = conditionalMoments.obervation.dt
 
     # This can be done better with multiple dispatch
     if fitSettings.fixThetaFlag
         # Fixed theta method
         thetaEst, thetaProperties = theta_fixed(
-            conditionalMoments.obervation.X,
-            dt,
+            dA,
+            timeShifts,
             maximumLag,
-            fitSettings
+            fitSettings.fixThetaValue
         )
     else
         # Estimating theta
-        maximumTheta = maximumLag*dt
         thetaEst, thetaProperties = theta_search(
-            conditionalMoments.obervation.X,
-            dt,
-            maximumLag,
-            maximumTheta
+            dA,
+            timeShifts,
+            maximumLag
         )
     end
 
     return thetaEst, thetaProperties
 end
 
-function theta_fixed(X,dt,nuMax,fitSettings)
-    # Get set theta value
-    thetaEst = fitSettings.fixThetaValue
-
-    # Autocorrelation (single data)
-    dA = autocorr_increment(X,nuMax)
-
+function theta_fixed(dA,timeShifts,nuMax,thetaEst)
     # R matrix and lambda vector
-    rNuMatrix = form_r_matrix(dt,nuMax) # Function: real -> matrix
-    rMatrix = rNuMatrix(thetaEst) # Returns r[tau,theta] matrix
+    rMatrix = form_r_matrix(timeShifts,thetaEst) # Returns r[tau,theta] matrix
     lambdaStar = rMatrix \ dA
 
     return thetaEst, ThetaProperties(
@@ -59,20 +50,16 @@ end
 
 #NOTE: MATLAB secn-PR follows this with a second search over 1:ceil(sqrt(theta)/dt)
 # time shifts. That rule depends on the units of time, so it is not used here.
-function theta_search(X,dt,nuMax,thetaMax)
-    # Autocorrelation (single data)
-    dA = autocorr_increment(X,nuMax)
-
-    # Search over all time shifts
-    thetaEst, rNuMatrix, lambdaStar = theta_basis_function_fit(
+function theta_search(dA,timeShifts,nuMax)
+    # Search over all time shifts, for theta up to the largest time shift
+    thetaEst, lambdaStar = theta_basis_function_fit(
         dA,
-        dt,
-        nuMax,
-        thetaMax
+        timeShifts,
+        maximum(timeShifts)
     )
 
     # R matrix
-    rMatrix = rNuMatrix(thetaEst) # Returns r[tau,theta] matrix
+    rMatrix = form_r_matrix(timeShifts,thetaEst) # Returns r[tau,theta] matrix
 
     return thetaEst, ThetaProperties(
         nuMax,
@@ -83,11 +70,10 @@ function theta_search(X,dt,nuMax,thetaMax)
 end
 
 #NOTE: Make these anon functions into regular functions?
-function theta_basis_function_fit(dA,dt,nuMax,thetaMax)
+function theta_basis_function_fit(dA,timeShifts,thetaMax)
     # Objective function from matrix
-    rNuMatrix = form_r_matrix(dt,nuMax)
-    lambdaFunc = theta_c -> rNuMatrix(theta_c) \ dA
-    funcValue = theta_c -> sum((dA .- (rNuMatrix(theta_c) * lambdaFunc(theta_c))).^2)
+    lambdaFunc = theta_c -> form_r_matrix(timeShifts,theta_c) \ dA
+    funcValue = theta_c -> sum((dA .- (form_r_matrix(timeShifts,theta_c) * lambdaFunc(theta_c))).^2)
 
     # Bounded line search, MATLAB original: thetaStar = fminbnd(funcValue,0,thetaMax);
     # Searches over u = theta/thetaMax in [0,1], so the tolerance is independent
@@ -107,19 +93,19 @@ function theta_basis_function_fit(dA,dt,nuMax,thetaMax)
     # Best fit lambda vector
     lambdaStar = lambdaFunc(thetaEst)
 
-    return thetaEst, rNuMatrix, lambdaStar
+    return thetaEst, lambdaStar
 end
 
-function form_r_matrix(dt,nuMax)
-    # Basis functions
-    r1(tau,theta) = tau - theta*(1 - exp(-tau/theta))
-    r2(tau,theta) = tau.^2/2 - theta*r1(tau,theta)
-    r3(tau,theta) = tau.^3/6 - theta*r2(tau,theta)
-    rArray(tau,theta) = [r1(tau,theta),r2(tau,theta),r3(tau,theta)] # ?
-    
-    # Functions r matrix (reducing dependencies, new method)
-    nu = 1:nuMax
-    tau_nu = nu*dt
-    rNuMatrix = theta -> mapreduce(permutedims, vcat, rArray.(tau_nu,theta))
-    return rNuMatrix
+# Matrix of basis functions r_k(tau,theta), one row per time shift tau
+function form_r_matrix(timeShifts,theta)
+    rMatrix = Matrix{Float64}(undef, length(timeShifts), 3)
+    for (i, tau) in enumerate(timeShifts)
+        r1 = tau - theta*(1 - exp(-tau/theta))
+        r2 = tau^2/2 - theta*r1
+        r3 = tau^3/6 - theta*r2
+        rMatrix[i,1] = r1
+        rMatrix[i,2] = r2
+        rMatrix[i,3] = r3
+    end
+    return rMatrix
 end

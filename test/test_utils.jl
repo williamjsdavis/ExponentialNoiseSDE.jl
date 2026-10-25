@@ -20,6 +20,19 @@ function test_utility_statistics()
     end
 end
 
+# Test validation of the time shift lags
+function test_time_shift_validation()
+    @testset "Time shift validation" begin
+        settings(lags) = ConditionalMomentSettings(lags, 5, (-1.0,1.0), "Epanechnikov", 0.1)
+        @test settings(collect(1:4)).timeShiftSamplePoints == 1:4
+        @test settings(2:2:30).timeShiftSamplePoints == 2:2:30
+        @test_throws ArgumentError settings(collect(15:-1:1)) # Not increasing
+        @test_throws ArgumentError settings([1,1,2,3,4]) # Repeated
+        @test_throws ArgumentError settings([0,1,2,3]) # Not positive
+        @test_throws ArgumentError settings([1,2,3]) # Too few to identify theta
+    end
+end
+
 # Test with a small amount of data
 function small_data_test()
     ## Observations

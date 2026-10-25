@@ -36,6 +36,21 @@ function scientific_tests()
         @test spread(160_000)/spread(10_000) < 0.6
     end
 
+    @testset "Time shifts" begin
+        # Any increasing set of lags can be used, e.g. every other lag
+        @test isapprox(theta_of(fit_model(X, DT_SIM; lags=2:2:30)), θ_TRUE; rtol=0.21)
+
+        # The fit uses only what build_moments computed, not the raw data
+        observation = Observation(copy(X), DT_SIM)
+        momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), "Epanechnikov", 0.1)
+        conditionalMoments = build_moments(observation, momentSettings)
+        fill!(observation.X, NaN)
+        refit = estimate_model(conditionalMoments, ModelEstimateSettings())
+        @test theta_of(refit) == theta_of(model)
+        @test drift_of(refit) == drift_of(model)
+        @test noise_of(refit) == noise_of(model)
+    end
+
     @testset "White noise" begin
         # θ = 0: the estimate should be at or near zero (θ̂/dt ≤ 0.04 over 100
         # seeds; 40% are exactly 0, which used to crash the estimation)
