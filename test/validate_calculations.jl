@@ -17,15 +17,15 @@ function validate_theta(modelEstimate)
     # Sample autocorrelation
     dAMATLAB = DelimitedFiles.readdlm(datafile("dAMATLAB.txt"))[:]
 
-    dATol = 1E-5
+    # Tolerances below are 20-600x the agreement achieved (dA 1.7e-16, lambdaStar
+    # 5.9e-6 rel., rMatrix 2.5e-10, theta 2.6e-10)
+    dATol = 1E-13
     dAError = abs.(modelEstimate.thetaProperties.dA .- dAMATLAB)
 
     # Lambda star
-    # New error (precomputed dA)  1.036447083713199e-8 4.922411280805505e-7 1.0629501136616426e-5
-    #NOTE: Possible large error on these coefficients
     lambdaStarMATLAB = DelimitedFiles.readdlm(datafile("lambdaStarMATLAB.txt"))[:]
 
-    lambdaStarRTol = 0.25
+    lambdaStarRTol = 1E-4
     lambdaStarError = abs.(modelEstimate.thetaProperties.lambdaStar .- lambdaStarMATLAB)
     lambdaStarRError = abs.(lambdaStarError ./ lambdaStarMATLAB)
 
@@ -35,16 +35,13 @@ function validate_theta(modelEstimate)
     # rMatrix
     rMatrixMATLAB = DelimitedFiles.readdlm(datafile("rMatrixMATLAB.txt"),',')
 
-    rMatrixTol = 1E-4
+    rMatrixTol = 1E-8
     rMatrixError = abs.(modelEstimate.thetaProperties.rMatrix .- rMatrixMATLAB)
 
     # Correlation estimate
-    # MATLAB value      = 0.0102596398898808
-    # Previous estimate = 0.01023577455198391
-    # New error (precomputed dA) 2.6393070541586017e-10
     correlationEstimteMATLAB = DelimitedFiles.readdlm(datafile("correlationEstimateMATLAB.txt"))[1]
 
-    correlationEstimteTol = 1E-4
+    correlationEstimteTol = 1E-8
     correlationEstimteError = abs(modelEstimate.correlationEstimate - correlationEstimteMATLAB)
 
     @testset "MATLAB validation: theta properties" begin
@@ -61,14 +58,15 @@ function validate_lambda(modelEstimate)
     # lambda1Star/lambda1Est
     lambda1StarMATLAB = DelimitedFiles.readdlm(datafile("lambda1StarMATLAB.txt"),',')
 
-    lambda1StarRTol = 0.25
+    # Agreement achieved: 4.9e-6 rel. (lambda1), 2.5e-6 rel. (lambda2)
+    lambda1StarRTol = 1E-4
     lambda1StarError = abs.(modelEstimate.lambdaProperties.lambda1Est' .- lambda1StarMATLAB)
     lambda1StarRError = abs.(lambda1StarError ./ lambda1StarMATLAB)
 
     # lambda2Star/lambda2Est
     lambda2StarMATLAB = DelimitedFiles.readdlm(datafile("lambda2StarMATLAB.txt"),',')
 
-    lambda2StarRTol = 0.12
+    lambda2StarRTol = 1E-4
     lambda2StarError = abs.(modelEstimate.lambdaProperties.lambda2Est' .- lambda2StarMATLAB)
     lambda2StarRError = abs.(lambda2StarError ./ lambda2StarMATLAB)
 
@@ -83,25 +81,26 @@ function validate_functions(modelEstimate)
     # Drift function (initial)
     driftInitialMATLAB = DelimitedFiles.readdlm(datafile("driftInitialMATLAB.txt"))[:]
 
-    driftInitialTol = 1E-2
+    # Agreement achieved: drift 4.1e-8, noise 1.1e-8
+    driftInitialTol = 1E-6
     driftInitialError = abs.(modelEstimate.driftInitial .- driftInitialMATLAB)
 
     # Drift function (estimate)
     driftEstimateMATLAB = DelimitedFiles.readdlm(datafile("driftEstimateMATLAB.txt"))[:]
 
-    driftEstimteTol = 1E-2
+    driftEstimteTol = 1E-6
     driftEstimateError = abs.(modelEstimate.driftEstimate .- driftEstimateMATLAB)
 
     # Noise function (initial)
     noiseInitialMATLAB = DelimitedFiles.readdlm(datafile("noiseInitialMATLAB.txt"))[:]
 
-    noiseInitialTol = 1E-3
+    noiseInitialTol = 1E-6
     noiseInitialError = abs.(modelEstimate.noiseInitial .- noiseInitialMATLAB)
 
     # Noise function (estimate)
     noiseEstimateMATLAB = DelimitedFiles.readdlm(datafile("noiseEstimateMATLAB.txt"))[:]
 
-    noiseEstimteTol = 1E-3
+    noiseEstimteTol = 1E-6
     noiseEstimateError = abs.(modelEstimate.noiseEstimate .- noiseEstimateMATLAB)
 
     @testset "MATLAB validation: function properties" begin
