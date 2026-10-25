@@ -10,6 +10,14 @@ function test_utility_statistics()
         @test all(ExponentialNoiseSDE.movmean([10,2,3,2,4,8,21],4) .== [6.0,5.0,4.25,2.75,4.25,8.75,11.0])
         @test all(ExponentialNoiseSDE.movmean([9,2,4,3,2,7,21],5) .== [5.0,4.5,4.0,3.6,7.4,8.25,10.0])
     end
+    @testset "Autocorrelation" begin
+        # Linear (not circular) autocorrelation, by direct summation
+        X = randn(StableRNG(2), 50)
+        Xdemean = X .- sum(X)/length(X)
+        lags = 10
+        acfDirect = [sum(Xdemean[1:end-k] .* Xdemean[1+k:end]) for k in 0:lags] ./ sum(abs2, Xdemean)
+        @test ExponentialNoiseSDE.myAutocorr(X, lags) ≈ acfDirect rtol=1E-12
+    end
 end
 
 # Test with a small amount of data
