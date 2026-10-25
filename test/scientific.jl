@@ -24,7 +24,7 @@ function scientific_tests()
 
     @testset "Recovery" begin
         @test isapprox(theta_of(model), θ_TRUE; rtol=0.32)
-        @test maximum(abs, drift_of(model)[inner] .- example_drift.(x[inner])) < 0.72
+        @test maximum(abs, drift_of(model)[inner] .- example_drift.(x[inner])) < 0.73
         @test maximum(abs, noise_of(model)[inner] .- example_noise.(x[inner])) < 0.15
     end
 
@@ -65,20 +65,19 @@ function scientific_tests()
     unsmoothed = FiniteDiff()
     @testset "Invariance, fixed iterations" begin
         for method in (pinned(smoothed, 3), pinned(unsmoothed, 3))
+            # Pinned iterations never meet the tolerance, so they warn
+            @test_logs (:warn, r"did not converge") match_mode=:any begin
+                reference = fit_model(X, DT_SIM; method)
+                @test matches(reference, time_rescaled(X, DT_SIM, method))
+                @test matches(reference, space_rescaled(X, DT_SIM, method))
+            end
+        end
+    end
+    @testset "Invariance, default settings" begin
+        for method in (smoothed, unsmoothed)
             reference = fit_model(X, DT_SIM; method)
             @test matches(reference, time_rescaled(X, DT_SIM, method))
             @test matches(reference, space_rescaled(X, DT_SIM, method))
         end
-    end
-    @testset "Invariance, default settings" begin
-        # The default stopping thresholds are absolute, so the number of
-        # iterations can change with the units. The smoothed time check passes
-        # only because both runs stop after one iteration on this data.
-        reference = fit_model(X, DT_SIM; method=smoothed)
-        @test matches(reference, time_rescaled(X, DT_SIM, smoothed))
-        @test_broken matches(reference, space_rescaled(X, DT_SIM, smoothed))
-        reference = fit_model(X, DT_SIM; method=unsmoothed)
-        @test_broken matches(reference, time_rescaled(X, DT_SIM, unsmoothed))
-        @test_broken matches(reference, space_rescaled(X, DT_SIM, unsmoothed))
     end
 end

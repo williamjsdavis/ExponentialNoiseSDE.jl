@@ -3,105 +3,120 @@
 # Function estimation methods
 abstract type FunctionIterateMethod end
 
+# Fixed-point iteration with finite-difference gradients. Stops when the
+# relative change in both f and g from the previous iteration is below
+# functionConvergenceValue, or after functionIterMax iterations.
 struct FiniteDiff <: FunctionIterateMethod
     functionConvergenceValue::Float64
     functionIterMax::Int64
+    function FiniteDiff(functionConvergenceValue, functionIterMax)
+        check_iteration_settings(functionConvergenceValue, functionIterMax)
+        return new(functionConvergenceValue, functionIterMax)
+    end
 end
 
-struct SmoothedFiniteDiff
+# As FiniteDiff, with an nPointSmooth-point moving mean applied to the
+# functions and their gradients in each iteration
+struct SmoothedFiniteDiff <: FunctionIterateMethod
     nPointSmooth::Int64
     functionConvergenceValue::Float64
     functionIterMax::Int64
+    function SmoothedFiniteDiff(nPointSmooth, functionConvergenceValue, functionIterMax)
+        nPointSmooth >= 1 || throw(ArgumentError(
+            "nPointSmooth must be at least 1, got $nPointSmooth"))
+        check_iteration_settings(functionConvergenceValue, functionIterMax)
+        return new(nPointSmooth, functionConvergenceValue, functionIterMax)
+    end
 end
+
+function check_iteration_settings(functionConvergenceValue, functionIterMax)
+    functionConvergenceValue >= 0 || throw(ArgumentError(
+        "functionConvergenceValue must be non-negative, got $functionConvergenceValue"))
+    functionIterMax >= 1 || throw(ArgumentError(
+        "functionIterMax must be at least 1, got $functionIterMax"))
+    return nothing
+end
+
+# Diagnostics of the drift and noise iteration
+struct FunctionIterationDiagnostics
+    iterations::Int64 # Iterations used (the most over runs of points with data)
+    converged::Bool
+    negativeNoiseCount::Int64 # Times the squared noise was negative and set to 0
+end
+
+# Moving mean window; FiniteDiff is the unsmoothed case
+smoothing_window(::FiniteDiff) = 1
+smoothing_window(functionIterateMethod::SmoothedFiniteDiff) = functionIterateMethod.nPointSmooth
 
 # Solve separately on each run of consecutive evaluation points with data, so
 # points without data (NaN lambdas) do not spread to their neighbours through
 # the finite differences and smoothing
 function fg_solve_with_data(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod)
     fInitial = copy(lambda1_1)
-    gInitial = sqrt.(abs.(lambda2_1))
+    gInitial = sqrt.(max.(lambda2_1, 0))
     fEstimate = fill(NaN, length(xEvalPoints))
     gEstimate = fill(NaN, length(xEvalPoints))
+    iterations = 0
+    converged = true
+    nNegative = count(<(0), lambda2_1)
 
     hasData = isfinite.(lambda1_1) .& isfinite.(lambda2_1)
     for run in true_runs(hasData)
         length(run) >= 3 || continue # Finite differences need 3 points
-        fEstimate[run], gEstimate[run] = fg_solve(
+        fEstimate[run], gEstimate[run], runIterations, runConverged, runNegative = fg_solve(
             lambda1_1[run],
             lambda2_1[run],
             theta,
             xEvalPoints[run],
             functionIterateMethod
         )
+        iterations = max(iterations, runIterations)
+        converged &= runConverged
+        nNegative += runNegative
     end
-    return fEstimate, gEstimate, fInitial, gInitial
+
+    if nNegative > 0
+        @warn "Negative squared noise estimate ($nNegative time(s), over points and iterations); set to 0"
+    end
+    if !converged
+        @warn "Drift and noise iteration did not converge in $(functionIterateMethod.functionIterMax) iterations" functionIterateMethod.functionConvergenceValue
+    end
+    diagnostics = FunctionIterationDiagnostics(iterations, converged, nNegative)
+    return fEstimate, gEstimate, fInitial, gInitial, diagnostics
 end
 
-# Finite difference solution for functions
-function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::FiniteDiff)
+# Fixed-point solution for f and g, starting from the lambdas. Returns f, g,
+# the number of iterations, whether it converged, and the number of times the
+# squared noise was negative (and set to 0).
+function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::FunctionIterateMethod)
+    nPointSmooth = smoothing_window(functionIterateMethod)
+    smooth(F) = movmean(F,nPointSmooth)
+    tolerance = functionIterateMethod.functionConvergenceValue
+
     # Starting values
-    fInitial = lambda1_1
-    gInitial = sqrt.(abs.(lambda2_1))
-    fNew = fInitial
-    gNew = gInitial
-    
-    # Iterate until converged
-    count = 0
-    totalError = Inf
-    while (totalError > functionIterateMethod.functionConvergenceValue) && (count < functionIterateMethod.functionIterMax)
-        count = count + 1
-        
-        fOld = fNew
-        gOld = gNew
+    fNew = smooth(lambda1_1)
+    gNew = smooth(sqrt.(max.(lambda2_1, 0)))
+    lambda1_1_smooth = smooth(lambda1_1)
+    lambda2_1_smooth = smooth(lambda2_1)
+
+    # Iterate until the relative change in f and g is small
+    iterations = 0
+    converged = false
+    nNegative = 0
+    while !converged && (iterations < functionIterateMethod.functionIterMax)
+        iterations = iterations + 1
+
+        fPrevious = fNew
+        gPrevious = gNew
 
         # Estimate gradients (finite differences)
-        fGrad = fdiffNU(xEvalPoints,fOld)
-        gGrad = fdiffNU(xEvalPoints,gOld)
-        
+        fOld = smooth(fPrevious)
+        gOld = smooth(gPrevious)
+        fGrad = smooth(fdiffNU(xEvalPoints,fOld))
+        gGrad = smooth(fdiffNU(xEvalPoints,gOld))
+
         # Find updated values
-        fNew, gNew = fixed_point_iterate(
-            lambda1_1,
-            lambda2_1,
-            fOld,
-            gOld,
-            fGrad,
-            gGrad,
-            theta
-        )
-        
-        totalError = sum((fNew .- fOld).^2) + sum((gNew .- gOld).^2)
-    end
-   return fNew, gNew, fInitial, gInitial 
-end
-
-function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::SmoothedFiniteDiff)
-    # Starting values
-    fInitial = lambda1_1
-    gInitial = sqrt.(abs.(lambda2_1))
-    fNew = movmean(fInitial,functionIterateMethod.nPointSmooth)
-    gNew = movmean(gInitial,functionIterateMethod.nPointSmooth)
-    lambda1_1_smooth = movmean(lambda1_1,functionIterateMethod.nPointSmooth)
-    lambda2_1_smooth = movmean(lambda2_1,functionIterateMethod.nPointSmooth)
-
-    # Iterate until converged
-    count = 0
-    totalError = Inf
-    while (totalError > functionIterateMethod.functionConvergenceValue) && (count < functionIterateMethod.functionIterMax)
-        count = count + 1
-        
-        fOld = fNew
-        gOld = gNew
-
-        # Estimate gradients (finite differences)
-        fOld = movmean(fOld,functionIterateMethod.nPointSmooth)
-        gOld = movmean(gOld,functionIterateMethod.nPointSmooth)
-        fGrad = fdiffNU(xEvalPoints,fOld)
-        gGrad = fdiffNU(xEvalPoints,gOld)
-        fGrad = movmean(fGrad,functionIterateMethod.nPointSmooth)
-        gGrad = movmean(gGrad,functionIterateMethod.nPointSmooth)
-        
-        # Find updated values
-        fNew, gNew = fixed_point_iterate(
+        fNew, gSquared = fixed_point_iterate(
             lambda1_1_smooth,
             lambda2_1_smooth,
             fOld,
@@ -110,18 +125,24 @@ function fg_solve(lambda1_1,lambda2_1,theta,xEvalPoints,functionIterateMethod::S
             gGrad,
             theta
         )
-        totalError = sum((fNew .- fOld).^2) + sum((gNew .- gOld).^2)
+        nNegative += count(<(0), gSquared)
+        gNew = sqrt.(max.(gSquared, 0))
+
+        converged = relative_change(fNew, fPrevious) < tolerance &&
+            relative_change(gNew, gPrevious) < tolerance
     end
-   return fNew, gNew, fInitial, gInitial 
+    return fNew, gNew, iterations, converged, nNegative
 end
 
-# Finite difference iteration
+# Change between iterates, relative to the size of the previous iterate
+relative_change(new, previous) = sqrt(sum(abs2, new .- previous)/sum(abs2, previous))
+
+# Finite difference iteration, giving updated f and g^2
 function fixed_point_iterate(lambda1_1,lambda2_1,f,g,fGrad,gGrad,theta)
     fNew = lambda1_1 .- 0.5*g.*gGrad .- 
                 0.5*theta*(fGrad.*g.*gGrad .- f.*gGrad.^2)
-    gNew = sqrt.(abs.(lambda2_1 .- 
-                theta*(fGrad.*g.^2 .- f.*g.*gGrad)))
-    return fNew, gNew
+    gSquaredNew = lambda2_1 .- theta*(fGrad.*g.^2 .- f.*g.*gGrad)
+    return fNew, gSquaredNew
 end
 
 #NOTE: Non-uniform finite-differences (can probably specialize & dispatch)

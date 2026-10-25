@@ -159,12 +159,15 @@ function small_data_test()
         @test bootstrapSettings2.displayOutputFlag == true
     end
 
-    # Estimating
-    bootstrapStatistics = estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1;
-        rng=StableRNG(BOOTSTRAP_SEED))
+    # Estimating. Short resamples of this small dataset often give negative
+    # squared noise estimates, which are warned about and set to 0.
+    bootstrapStatistics = quietly() do
+        estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1; rng=StableRNG(BOOTSTRAP_SEED))
+    end
     @testset "Bootstrap reproducibility" begin
-        repeatStatistics = estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1;
-            rng=StableRNG(BOOTSTRAP_SEED))
+        repeatStatistics = quietly() do
+            estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1; rng=StableRNG(BOOTSTRAP_SEED))
+        end
         @test repeatStatistics.correlationEstimate == bootstrapStatistics.correlationEstimate
         @test repeatStatistics.driftEstimate == bootstrapStatistics.driftEstimate
         @test repeatStatistics.noiseEstimate == bootstrapStatistics.noiseEstimate
@@ -185,9 +188,11 @@ function small_data_test()
         wideMomentSettings = ConditionalMomentSettings(
             timeShiftSamplePoints, nEvalPoints, xEvalLims, kernel, 0.05)
         wideModelEstimate = estimate_model(build_moments(obs, wideMomentSettings), modelSettings1)
-        nCompleted = count(1:100) do seed
-            estimate_bootstrap_statistics(wideModelEstimate,bootstrapSettings1; rng=StableRNG(seed))
-            true
+        nCompleted = quietly() do
+            count(1:100) do seed
+                estimate_bootstrap_statistics(wideModelEstimate,bootstrapSettings1; rng=StableRNG(seed))
+                true
+            end
         end
         @test nCompleted == 100
 
@@ -314,4 +319,53 @@ function estimate_large_model_unsmoothed()
     # Do full estimate
     modelEstimate = estimate_model(obs, momentSettings, fitSettings)
     return modelEstimate
+end
+
+# Test the drift and noise fixed-point iteration
+function test_function_iteration()
+    @testset "Drift and noise iteration" begin
+        X = readdlm(datafile("exampleData.txt"))[:]
+        conditionalMoments = build_moments(Observation(X, 0.0050),
+            ConditionalMomentSettings(collect(1:15), 20, (-1.0,1.0), Epanechnikov(), 0.1))
+        fit(method) = estimate_model(conditionalMoments, ModelEstimateSettings(functionIterateMethod=method))
+
+        # FiniteDiff is the unsmoothed case of SmoothedFiniteDiff
+        @test FiniteDiff <: ExponentialNoiseSDE.FunctionIterateMethod
+        @test SmoothedFiniteDiff <: ExponentialNoiseSDE.FunctionIterateMethod
+        unsmoothed = fit(FiniteDiff())
+        windowOne = fit(SmoothedFiniteDiff(nPointSmooth=1))
+        @test unsmoothed.driftEstimate == windowOne.driftEstimate
+        @test unsmoothed.noiseEstimate == windowOne.noiseEstimate
+
+        # Default settings converge, in more than one iteration
+        for model in (unsmoothed, fit(SmoothedFiniteDiff()))
+            @test model.functionDiagnostics.converged
+            @test 1 < model.functionDiagnostics.iterations < 20
+            @test model.functionDiagnostics.negativeNoiseCount == 0
+        end
+
+        # The smoothed iteration reaches small tolerances
+        tight = fit(SmoothedFiniteDiff(functionConvergenceValue=1E-10, functionIterMax=50))
+        @test tight.functionDiagnostics.converged
+
+        # Not converging is reported
+        oneIteration = @test_logs (:warn, r"did not converge") fit(SmoothedFiniteDiff(functionIterMax=1))
+        @test !oneIteration.functionDiagnostics.converged
+        @test oneIteration.functionDiagnostics.iterations == 1
+
+        # Negative squared noise is set to 0, with a warning
+        x = collect(range(-1, 1, length=7))
+        lambda2 = [1.0, 1.0, 1.0, -0.5, 1.0, 1.0, 1.0]
+        _, g, _, gInitial, diagnostics = @test_logs (:warn, r"Negative squared noise") match_mode=:any begin
+            ExponentialNoiseSDE.fg_solve_with_data(zeros(7), lambda2, 0.0, x, FiniteDiff())
+        end
+        @test gInitial[4] == 0
+        @test g[4] == 0
+        @test diagnostics.negativeNoiseCount > 0
+
+        # Invalid settings
+        @test_throws ArgumentError SmoothedFiniteDiff(nPointSmooth=0)
+        @test_throws ArgumentError FiniteDiff(functionIterMax=0)
+        @test_throws ArgumentError FiniteDiff(functionConvergenceValue=-1.0)
+    end
 end
