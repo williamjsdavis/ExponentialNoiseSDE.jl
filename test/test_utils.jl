@@ -15,7 +15,7 @@ end
 # Test with a small amount of data
 function small_data_test()
     ## Observations
-    X_data = DelimitedFiles.readdlm("./data/exampleData.txt")[1:1000]
+    X_data = DelimitedFiles.readdlm(datafile("exampleData.txt"))[1:1000]
     N_data = length(X_data)
     obs = Observation(
         X_data,
@@ -106,7 +106,15 @@ function small_data_test()
     end
 
     # Estimating
-    bootstrapStatistics = estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1)
+    bootstrapStatistics = estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1;
+        rng=StableRNG(BOOTSTRAP_SEED))
+    @testset "Bootstrap reproducibility" begin
+        repeatStatistics = estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1;
+            rng=StableRNG(BOOTSTRAP_SEED))
+        @test repeatStatistics.correlationEstimate == bootstrapStatistics.correlationEstimate
+        @test repeatStatistics.driftEstimate == bootstrapStatistics.driftEstimate
+        @test repeatStatistics.noiseEstimate == bootstrapStatistics.noiseEstimate
+    end
     @testset "BootstrapStatistics" begin
         @test size(bootstrapStatistics.correlationEstimate[:mean]) == ()
         @test size(bootstrapStatistics.correlationEstimate[:percentiles95]) == (2,)
@@ -151,7 +159,7 @@ function estimate_large_model()
     momentSettings, modelSettings = get_default_estimation_settings()
 
     ## Data
-    X_data = readdlm("./data/exampleData.txt")[:]
+    X_data = readdlm(datafile("exampleData.txt"))[:]
 
     obs = Observation(
         X_data,
@@ -176,7 +184,7 @@ function estimate_large_model_unsmoothed()
     )
 
     ## Data
-    X_data = readdlm("./data/exampleData.txt")[:]
+    X_data = readdlm(datafile("exampleData.txt"))[:]
 
     obs = Observation(
         X_data,

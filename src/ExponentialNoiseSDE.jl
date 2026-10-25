@@ -4,7 +4,7 @@ module ExponentialNoiseSDE
 using FFTW: fft, ifft
 using NLopt: Opt, optimize
 using Statistics: mean, var, std, median, quantile
-using Random:rand
+using Random: rand, AbstractRNG, default_rng
 
 export Observation
 

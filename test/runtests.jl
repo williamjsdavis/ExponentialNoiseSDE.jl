@@ -1,26 +1,42 @@
 using ExponentialNoiseSDE
 using DelimitedFiles
+using StableRNGs
+using Aqua
 using Test
+
+# Test data lives next to this file, so tests run from any working directory
+datafile(name) = joinpath(@__DIR__, "data", name)
+
+# Fixed seed for bootstrap tests (StableRNG streams are stable across Julia versions)
+const BOOTSTRAP_SEED = 1
+
 include("test_utils.jl")
 include("validate_calculations.jl")
 
-## Utilities and statistics
-test_utility_statistics()
+@testset "ExponentialNoiseSDE.jl" begin
+    ## Utilities and statistics
+    test_utility_statistics()
 
-## Small dataset
-small_data_test()
+    ## Small dataset
+    small_data_test()
 
-## Validate full data calculations 
-# (against MATLAB smoothed finite diff calculations)
-modelEstimate = estimate_large_model()
+    ## Validate full data calculations
+    # (against MATLAB smoothed finite diff calculations)
+    modelEstimate = estimate_large_model()
 
-validate_basic(modelEstimate)
-validate_theta(modelEstimate)
-validate_lambda(modelEstimate)
-validate_functions(modelEstimate)
+    validate_basic(modelEstimate)
+    validate_theta(modelEstimate)
+    validate_lambda(modelEstimate)
+    validate_functions(modelEstimate)
 
-# Against unsmoothed finite diff calculations
-modelEstimateUnsmoothed = estimate_large_model_unsmoothed()
-validate_unsmoothed_functions(modelEstimateUnsmoothed,modelEstimate)
+    # Against unsmoothed finite diff calculations
+    modelEstimateUnsmoothed = estimate_large_model_unsmoothed()
+    validate_unsmoothed_functions(modelEstimateUnsmoothed,modelEstimate)
 
-## Bootstrapping uncertainties
+    ## Package quality
+    @testset "Aqua" begin
+        Aqua.test_all(ExponentialNoiseSDE; undefined_exports=false)
+        # `Epanechnikov` is exported but not defined
+        @test_broken isempty(filter(n -> !isdefined(ExponentialNoiseSDE, n), names(ExponentialNoiseSDE)))
+    end
+end
