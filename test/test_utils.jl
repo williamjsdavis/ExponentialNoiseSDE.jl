@@ -132,6 +132,19 @@ function small_data_test()
         @test size(bootstrapStatistics.driftEstimate[:percentiles95]) == (nEvalPoints,)
         @test size(bootstrapStatistics.driftEstimate[:percentiles95][1]) == (2,)
     end
+    @testset "Bootstrap over many seeds" begin
+        # Short resampled series can give a correlation time of exactly 0, which
+        # used to crash the estimation. The wider bandwidth keeps data under
+        # every evaluation point in every resample.
+        wideMomentSettings = ConditionalMomentSettings(
+            timeShiftSamplePoints, nEvalPoints, xEvalLims, kernel, 0.05)
+        wideModelEstimate = estimate_model(build_moments(obs, wideMomentSettings), modelSettings1)
+        nCompleted = count(1:100) do seed
+            estimate_bootstrap_statistics(wideModelEstimate,bootstrapSettings1; rng=StableRNG(seed))
+            true
+        end
+        @test nCompleted == 100
+    end
 end
 
 # Get estimated model for a large amount of data (using default settings)

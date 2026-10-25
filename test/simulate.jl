@@ -43,3 +43,17 @@ function simulate_process(rng, f, g, θ, dt, N; burnin=2000)
     end
     return X
 end
+
+# White-noise limit (θ = 0) with linear drift and unit noise, dX = -aX dt + dW,
+# using the exact Ornstein-Uhlenbeck transition
+function simulate_white_noise_process(rng, a, dt, N)
+    ρ = exp(-a*dt)
+    σ = sqrt((1 - ρ^2)/(2a))
+    x = randn(rng)/sqrt(2a) # Stationary start
+    X = Vector{Float64}(undef, N)
+    for n in 1:N
+        x = ρ*x + σ*randn(rng)
+        X[n] = x
+    end
+    return X
+end
