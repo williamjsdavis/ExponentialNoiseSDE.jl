@@ -36,21 +36,34 @@ function scientific_tests()
         @test spread(160_000)/spread(10_000) < 0.6
     end
 
+    @testset "White noise" begin
+        # θ = 0: the estimate should be at or near zero (θ̂/dt ≤ 0.04 over 100
+        # seeds; 40% are exactly 0, which used to crash the estimation)
+        for seed in 1:10
+            Xwhite = simulate_white_noise_process(StableRNG(seed), a, DT_SIM, 50_000)
+            @test theta_of(fit_model(Xwhite, DT_SIM)) < 0.1*DT_SIM
+        end
+    end
+
     # Estimates must not depend on the units of time or space
     smoothed = SmoothedFiniteDiff()
     unsmoothed = FiniteDiff()
     @testset "Invariance, fixed iterations" begin
         for method in (pinned(smoothed, 3), pinned(unsmoothed, 3))
             reference = fit_model(X, DT_SIM; method)
-            @test_broken matches(reference, time_rescaled(X, DT_SIM, method))
+            @test matches(reference, time_rescaled(X, DT_SIM, method))
             @test matches(reference, space_rescaled(X, DT_SIM, method))
         end
     end
     @testset "Invariance, default settings" begin
-        for method in (smoothed, unsmoothed)
-            reference = fit_model(X, DT_SIM; method)
-            @test_broken matches(reference, time_rescaled(X, DT_SIM, method))
-            @test_broken matches(reference, space_rescaled(X, DT_SIM, method))
-        end
+        # The default stopping thresholds are absolute, so the number of
+        # iterations can change with the units. The smoothed time check passes
+        # only because both runs stop after one iteration on this data.
+        reference = fit_model(X, DT_SIM; method=smoothed)
+        @test matches(reference, time_rescaled(X, DT_SIM, smoothed))
+        @test_broken matches(reference, space_rescaled(X, DT_SIM, smoothed))
+        reference = fit_model(X, DT_SIM; method=unsmoothed)
+        @test_broken matches(reference, time_rescaled(X, DT_SIM, unsmoothed))
+        @test_broken matches(reference, space_rescaled(X, DT_SIM, unsmoothed))
     end
 end

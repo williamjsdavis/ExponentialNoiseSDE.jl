@@ -30,9 +30,7 @@ function estimate_theta(conditionalMoments::ConditionalMoments, fitSettings::Mod
             conditionalMoments.obervation.X,
             dt,
             maximumLag,
-            maximumTheta,
-            fitSettings.thetaConvergenceValue,
-            fitSettings.displayOutputFlag
+            maximumTheta
         )
     end
 
@@ -59,42 +57,24 @@ function theta_fixed(X,dt,nuMax,fitSettings)
     )
 end
 
-function theta_search(X,dt,nuMax,thetaMax,thetaConvergenceValue,displayOutputFlag)
+#NOTE: MATLAB secn-PR follows this with a second search over 1:ceil(sqrt(theta)/dt)
+# time shifts. That rule depends on the units of time, so it is not used here.
+function theta_search(X,dt,nuMax,thetaMax)
     # Autocorrelation (single data)
     dA = autocorr_increment(X,nuMax)
 
-    # First search
-    thetaEstInitial, rNuMatrix, _ = theta_basis_function_fit(
+    # Search over all time shifts
+    thetaEst, rNuMatrix, lambdaStar = theta_basis_function_fit(
         dA,
         dt,
         nuMax,
-        thetaMax,
-        thetaConvergenceValue
-    )
-    # New maximum tau
-    newNuMax = ceil(Int64, sqrt(thetaEstInitial)/dt)
-    if newNuMax > nuMax
-        if displayOutputFlag
-            println("Calculating new ACF")
-        end
-        newNuMax = nuMax
-        dA = autocorr_increment(X,newNuMax)
-    end
-
-    # Second search
-    newThetaMax = newNuMax*dt
-    thetaEstNew, _, lambdaStar = theta_basis_function_fit(
-        dA[1:newNuMax],
-        dt,
-        newNuMax,
-        newThetaMax,
-        thetaConvergenceValue
+        thetaMax
     )
 
     # R matrix
-    rMatrix = rNuMatrix(thetaEstNew) # Returns r[tau,theta] matrix
+    rMatrix = rNuMatrix(thetaEst) # Returns r[tau,theta] matrix
 
-    return thetaEstNew, ThetaProperties(
+    return thetaEst, ThetaProperties(
         nuMax,
         rMatrix,
         dA,
@@ -103,22 +83,27 @@ function theta_search(X,dt,nuMax,thetaMax,thetaConvergenceValue,displayOutputFla
 end
 
 #NOTE: Make these anon functions into regular functions?
-function theta_basis_function_fit(dA,dt,nuMax,thetaMax,thetaConvergenceValue)
+function theta_basis_function_fit(dA,dt,nuMax,thetaMax)
     # Objective function from matrix
     rNuMatrix = form_r_matrix(dt,nuMax)
     lambdaFunc = theta_c -> rNuMatrix(theta_c) \ dA
     funcValue = theta_c -> sum((dA .- (rNuMatrix(theta_c) * lambdaFunc(theta_c))).^2)
 
-    # Line search using golden section search and parabolic interpolation
-    # Original MATLAB: thetaStar = fminbnd(funcValue,0,thetaMax);
-    objective_function(x,g) = funcValue(x[1])
+    # Bounded line search, MATLAB original: thetaStar = fminbnd(funcValue,0,thetaMax);
+    # Searches over u = theta/thetaMax in [0,1], so the tolerance is independent
+    # of the units of time
+    objective_function(u,g) = funcValue(u[1]*thetaMax)
     opt = Opt(:LN_COBYLA, 1)
     opt.lower_bounds = 0.0
-    opt.upper_bounds = thetaMax
+    opt.upper_bounds = 1.0
     opt.xtol_abs = 1E-12
+    opt.maxeval = 10_000
     opt.min_objective = objective_function
-    funcMin, xMin, retval = optimize(opt, [thetaMax])
-    thetaEst = xMin[1]
+    funcMin, uMin, retval = optimize(opt, [1.0])
+    if retval ∉ (:SUCCESS, :FTOL_REACHED, :XTOL_REACHED)
+        @warn "Correlation time search stopped early" retval
+    end
+    thetaEst = uMin[1]*thetaMax
     # Best fit lambda vector
     lambdaStar = lambdaFunc(thetaEst)
 
