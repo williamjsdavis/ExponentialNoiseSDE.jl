@@ -22,6 +22,7 @@ include("scientific.jl")
     test_utility_statistics()
     test_time_shift_validation()
     test_kernels()
+    test_points_without_data()
 
     ## Small dataset
     small_data_test()

@@ -9,6 +9,9 @@ function test_utility_statistics()
         @test all(ExponentialNoiseSDE.movmean([1,2,3,4],3) .== [1.5,2.0,3.0,3.5])
         @test all(ExponentialNoiseSDE.movmean([10,2,3,2,4,8,21],4) .== [6.0,5.0,4.25,2.75,4.25,8.75,11.0])
         @test all(ExponentialNoiseSDE.movmean([9,2,4,3,2,7,21],5) .== [5.0,4.5,4.0,3.6,7.4,8.25,10.0])
+        @test ExponentialNoiseSDE.true_runs([true,true,false,true]) == [1:2, 4:4]
+        @test ExponentialNoiseSDE.true_runs([false,true,true,true,false,false]) == [2:4]
+        @test ExponentialNoiseSDE.true_runs([false,false]) == UnitRange{Int}[]
     end
     @testset "Autocorrelation" begin
         # Linear (not circular) autocorrelation, by direct summation
@@ -187,6 +190,55 @@ function small_data_test()
             true
         end
         @test nCompleted == 100
+
+        # With the narrow bandwidth, some resamples have no data under an
+        # evaluation point; the bootstrap still completes
+        nCompletedSparse = @test_logs (:warn, r"No data within the kernel support") match_mode=:any begin
+            count(1:100) do seed
+                estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1; rng=StableRNG(seed))
+                true
+            end
+        end
+        @test nCompletedSparse == 100
+    end
+end
+
+# Test evaluation points with no data within the kernel support
+function test_points_without_data()
+    @testset "Evaluation points without data" begin
+        X = readdlm(datafile("exampleData.txt"))[:]
+        obs = Observation(X, 0.0050)
+        settings(nEvalPoints, evalLims) = ConditionalMomentSettings(
+            collect(1:15), nEvalPoints, evalLims, Epanechnikov(), 0.1)
+
+        # Limits wider than the data (-1.55 to 3.41)
+        conditionalMoments = @test_logs (:warn, r"No data within the kernel support") build_moments(
+            obs, settings(20, (-3.0, 3.0)))
+        x = conditionalMoments.xEvalPoints
+        noData = [!any(abs.(X[1:end-1] .- xj) .< 0.1*sqrt(5)) for xj in x]
+        @test any(noData)
+
+        # NaN only where there is no data
+        modelEstimate = estimate_model(conditionalMoments, ModelEstimateSettings())
+        @test isnan.(modelEstimate.driftEstimate) == noData
+        @test isnan.(modelEstimate.noiseEstimate) == noData
+        @test isfinite(modelEstimate.modelError.meanAbsoluteError)
+
+        # Elsewhere, the same as estimating on only the points with data
+        firstWithData = findfirst(!, noData)
+        @test all(.!noData[firstWithData:end])
+        subGrid = estimate_model(obs,
+            settings(length(x) - firstWithData + 1, (x[firstWithData], 3.0)),
+            ModelEstimateSettings())
+        @test modelEstimate.driftEstimate[firstWithData:end] ≈ subGrid.driftEstimate rtol=1E-10
+        @test modelEstimate.noiseEstimate[firstWithData:end] ≈ subGrid.noiseEstimate rtol=1E-10
+
+        # The bootstrap completes, with NaN percentiles only where there is no data
+        bootstrapStatistics = @test_logs (:warn, r"No data") match_mode=:any estimate_bootstrap_statistics(
+            modelEstimate, BootstrapSettings(nSamples=5, displayOutputFlag=false); rng=StableRNG(BOOTSTRAP_SEED))
+        driftPercentiles = bootstrapStatistics.driftEstimate[:percentiles95]
+        @test all(all.(isnan, driftPercentiles[noData]))
+        @test all(all.(isfinite, driftPercentiles[.!noData]))
     end
 end
 

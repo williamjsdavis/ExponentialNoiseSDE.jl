@@ -20,6 +20,9 @@ function generate_statistics_dict(varMean,varMedian,varStd,varPrc)
     )
 end
 
+# Quantiles, or NaN when there are no samples (no resample had data at a point)
+quantile_or_nan(samples, p) = isempty(samples) ? fill(NaN, length(p)) : quantile(samples, p)
+
 # Calculate sample statistics from bootstrap samples
 function calculate_sample_statistics(
         modelEstimate::ModelEstimate,
@@ -27,10 +30,12 @@ function calculate_sample_statistics(
         bootstrapSettings::BootstrapSettings)
     # Samples
     nEvalPoints = modelEstimate.conditionalMoments.momentSettings.nEvalPoints
+    # Resamples with no data at an evaluation point give NaN there, so the
+    # statistics at each point use the finite samples
     corrSamples = broadcast(x->x.correlationEstimate, bootstrapEstimates)
     errorSamples = broadcast(x->x.modelError.meanAbsoluteError, bootstrapEstimates)
-    get_drift_samples = j->broadcast(x->x.driftEstimate[j], bootstrapEstimates)
-    get_noise_samples = j->broadcast(x->x.noiseEstimate[j], bootstrapEstimates)
+    get_drift_samples = j->filter(isfinite, broadcast(x->x.driftEstimate[j], bootstrapEstimates))
+    get_noise_samples = j->filter(isfinite, broadcast(x->x.noiseEstimate[j], bootstrapEstimates))
 
     # Mean
     corrMean = mean(corrSamples)
@@ -57,16 +62,16 @@ function calculate_sample_statistics(
         noise_bias = j -> noiseMean[j] - modelEstimate.noiseEstimate[j]
         
         corrSamples = corrSamples .- corrBias
-        get_drift_samples = j->broadcast(x->x.driftEstimate[j] - drift_bias(j), bootstrapEstimates)
-        get_noise_samples = j->broadcast(x->x.noiseEstimate[j] - noise_bias(j), bootstrapEstimates)
+        get_drift_samples = j->filter(isfinite, broadcast(x->x.driftEstimate[j] - drift_bias(j), bootstrapEstimates))
+        get_noise_samples = j->filter(isfinite, broadcast(x->x.noiseEstimate[j] - noise_bias(j), bootstrapEstimates))
     end
 
     # Percentiles
     setPrc = [0.025,0.975]
     corrPrc = quantile(corrSamples,setPrc)
     errorPrc = quantile(errorSamples,setPrc)
-    driftPrc = broadcast(i->quantile(get_drift_samples(i),setPrc),1:nEvalPoints)
-    noisePrc = broadcast(i->quantile(get_noise_samples(i),setPrc),1:nEvalPoints)
+    driftPrc = broadcast(i->quantile_or_nan(get_drift_samples(i),setPrc),1:nEvalPoints)
+    noisePrc = broadcast(i->quantile_or_nan(get_noise_samples(i),setPrc),1:nEvalPoints)
 
     return BootstrapStatistics(
         generate_statistics_dict(corrMean,corrMedian,corrStd,corrPrc),
