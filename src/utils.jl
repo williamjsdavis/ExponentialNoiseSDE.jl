@@ -1,8 +1,5 @@
 # Utility and statistic functions
 
-# Conditional print
-verbose(cond::Bool,message::String) = cond ? println(message) : nothing
-
 # Index ranges of the runs of consecutive true values, e.g. [1,1,0,1] -> [1:2, 4:4]
 function true_runs(mask)
     runs = UnitRange{Int}[]

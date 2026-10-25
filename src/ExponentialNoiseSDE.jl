@@ -12,6 +12,7 @@ export Epanechnikov
 export ConditionalMoments, ConditionalMomentSettings
 export build_moments
 
+export EstimateTheta, FixedTheta
 export FiniteDiff, SmoothedFiniteDiff
 export ModelEstimateSettings, ModelEstimate
 export estimate_model
@@ -30,14 +31,12 @@ include("ConditionalMoments.jl")
 include("autocorrelation.jl")
 
 include("function_estimation.jl")
-include("ModelEstimate.jl")
 include("theta_estimation.jl")
 include("lambda_estimation.jl")
 include("model_error.jl")
+include("ModelEstimate.jl")
 
 include("Bootstrap.jl")
 include("BootstrapStatistics.jl")
-
-include("default_settings.jl")
 
 end # module ExponentialNoiseSDE

@@ -30,6 +30,7 @@ include("scientific.jl")
     test_function_iteration()
     test_bootstrap_statistics()
     test_input_validation()
+    test_settings_strategies()
 
     ## Small dataset
     small_data_test()

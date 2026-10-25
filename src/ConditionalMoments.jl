@@ -2,11 +2,11 @@
 
 # MATLAB equivalent: MomentOptionsClass.m
 #TODO: Add optimal bandwidth selection
-struct ConditionalMomentSettings
+Base.@kwdef struct ConditionalMomentSettings
     timeShiftSamplePoints::Array{Int64,1}
     nEvalPoints::Int64
     evalLims::Tuple{Float64,Float64}
-    kernel::Kernel
+    kernel::Kernel = Epanechnikov()
     bandwidth::Float64
     function ConditionalMomentSettings(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
         check_time_shifts(timeShiftSamplePoints)

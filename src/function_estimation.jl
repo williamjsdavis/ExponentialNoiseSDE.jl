@@ -6,9 +6,9 @@ abstract type FunctionIterateMethod end
 # Fixed-point iteration with finite-difference gradients. Stops when the
 # relative change in both f and g from the previous iteration is below
 # functionConvergenceValue, or after functionIterMax iterations.
-struct FiniteDiff <: FunctionIterateMethod
-    functionConvergenceValue::Float64
-    functionIterMax::Int64
+Base.@kwdef struct FiniteDiff <: FunctionIterateMethod
+    functionConvergenceValue::Float64 = 1E-4 # Relative change
+    functionIterMax::Int64 = 20
     function FiniteDiff(functionConvergenceValue, functionIterMax)
         check_iteration_settings(functionConvergenceValue, functionIterMax)
         return new(functionConvergenceValue, functionIterMax)
@@ -17,10 +17,10 @@ end
 
 # As FiniteDiff, with an nPointSmooth-point moving mean applied to the
 # functions and their gradients in each iteration
-struct SmoothedFiniteDiff <: FunctionIterateMethod
-    nPointSmooth::Int64
-    functionConvergenceValue::Float64
-    functionIterMax::Int64
+Base.@kwdef struct SmoothedFiniteDiff <: FunctionIterateMethod
+    nPointSmooth::Int64 = 3
+    functionConvergenceValue::Float64 = 1E-4 # Relative change
+    functionIterMax::Int64 = 20
     function SmoothedFiniteDiff(nPointSmooth, functionConvergenceValue, functionIterMax)
         nPointSmooth >= 1 || throw(ArgumentError(
             "nPointSmooth must be at least 1, got $nPointSmooth"))

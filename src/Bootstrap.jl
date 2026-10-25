@@ -2,18 +2,17 @@
 # MATLAB equivalent: SPbootstrapClass.m
 
 # MATLAB equivalent: BootstrapOptionsClass.m
-struct BootstrapSettings
-    blockLength::Int64
-    nSamples::Int64
-    biasCorrection::Bool
-    displayOutputFlag::Bool
-    function BootstrapSettings(blockLength, nSamples, biasCorrection, displayOutputFlag)
+Base.@kwdef struct BootstrapSettings
+    blockLength::Int64 = 500
+    nSamples::Int64 = 20
+    biasCorrection::Bool = true
+    function BootstrapSettings(blockLength, nSamples, biasCorrection)
         blockLength >= 1 || throw(ArgumentError(
             "blockLength must be at least 1, got $blockLength"))
         # Standard deviations need at least 2 samples
         nSamples >= 2 || throw(ArgumentError(
             "nSamples must be at least 2, got $nSamples"))
-        return new(blockLength, nSamples, biasCorrection, displayOutputFlag)
+        return new(blockLength, nSamples, biasCorrection)
     end
 end
 
@@ -34,11 +33,7 @@ function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSet
     bootstrapSettings.blockLength < originalObs.N || throw(ArgumentError(
         "blockLength ($(bootstrapSettings.blockLength)) must be shorter than the series ($(originalObs.N) samples)"))
 
-    # Toggle printing
-    verbose(
-        bootstrapSettings.displayOutputFlag, 
-        "Starting correlated process regression and bootstrap iterations"
-    )
+    @debug "Starting correlated process regression and bootstrap iterations" bootstrapSettings
 
     # Vary observation, keep the same settings
     estimate_model_set(obs) = 
@@ -65,19 +60,15 @@ function block_bootstrap(obs,estimate_model_set,bootstrapSettings,rng)
         bootsrapEstimates,
         obs,
         estimate_model_set,
-        bootstrapSampler,
-        bootstrapSettings.displayOutputFlag
+        bootstrapSampler
     )
     return bootsrapEstimates
 end
 
 # Calculate all samples and estimates
-function dispatch_bootstrap_calculations!(bootsrapEstimates,obs,estimate_model_set,bootstrapSampler,displayOutputFlag)
+function dispatch_bootstrap_calculations!(bootsrapEstimates,obs,estimate_model_set,bootstrapSampler)
     for i in eachindex(bootsrapEstimates)
-        verbose(
-            displayOutputFlag, 
-            "Sample: $i"
-        )
+        @debug "Bootstrap sample $i of $(length(bootsrapEstimates))"
         bootsrapEstimates[i] = make_bootstrap_estimate(obs,estimate_model_set,bootstrapSampler)
     end
 end
