@@ -395,3 +395,35 @@ function test_bootstrap_statistics()
         @test statistics.noiseEstimate[:mean] ≈ fill(4.4, 3)
     end
 end
+
+# Test that invalid inputs are rejected where they enter
+function test_input_validation()
+    @testset "Input validation" begin
+        X = readdlm(datafile("exampleData.txt"))[1:2000]
+        @test Observation(X, 0.0050).N == 2000
+        @test_throws ArgumentError Observation(X, 0.0050, 10)
+        @test_throws ArgumentError Observation(X, -0.0050)
+        @test_throws ArgumentError Observation(X, 0.0)
+        @test_throws ArgumentError Observation(X, Inf)
+        @test_throws ArgumentError Observation([X; NaN], 0.0050)
+
+        settings(; lags=collect(1:15), n=20, lims=(-1.0,1.0), h=0.1) =
+            ConditionalMomentSettings(lags, n, lims, Epanechnikov(), h)
+        @test_throws ArgumentError settings(n=2)
+        @test_throws ArgumentError settings(lims=(1.0,-1.0))
+        @test_throws ArgumentError settings(lims=(-Inf,1.0))
+        @test_throws ArgumentError settings(h=0.0)
+        @test_throws ArgumentError settings(h=-0.1)
+        @test_throws ArgumentError build_moments(Observation(X[1:10], 0.0050), settings())
+
+        @test_throws ArgumentError BootstrapSettings(blockLength=0)
+        @test_throws ArgumentError BootstrapSettings(nSamples=1)
+        modelEstimate = quietly() do
+            estimate_model(Observation(X, 0.0050), settings(), ModelEstimateSettings())
+        end
+        @test_throws ArgumentError estimate_bootstrap_statistics(modelEstimate,
+            BootstrapSettings(blockLength=2000, displayOutputFlag=false))
+
+        @test_throws ArgumentError ModelEstimateSettings(fixThetaFlag=true, fixThetaValue=-0.01)
+    end
+end

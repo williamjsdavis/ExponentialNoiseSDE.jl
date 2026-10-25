@@ -8,6 +8,13 @@ struct ModelEstimateSettings
     fixThetaValue::Float64
     keepObservation::Bool
     displayOutputFlag::Bool
+    function ModelEstimateSettings(thetaConvergenceValue, functionIterateMethod,
+            fixThetaFlag, fixThetaValue, keepObservation, displayOutputFlag)
+        (fixThetaValue >= 0 && isfinite(fixThetaValue)) || throw(ArgumentError(
+            "fixThetaValue must be non-negative and finite, got $fixThetaValue"))
+        return new(thetaConvergenceValue, functionIterateMethod,
+            fixThetaFlag, fixThetaValue, keepObservation, displayOutputFlag)
+    end
 end
 
 # MATLAB equivalent: SPmodelClass.m

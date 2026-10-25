@@ -10,8 +10,15 @@ struct ConditionalMomentSettings
     bandwidth::Float64
     function ConditionalMomentSettings(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
         check_time_shifts(timeShiftSamplePoints)
+        # Finite differences in the drift and noise solution need 3 points
+        nEvalPoints >= 3 || throw(ArgumentError(
+            "at least 3 evaluation points are needed, got $nEvalPoints"))
+        (all(isfinite, evalLims) && evalLims[1] < evalLims[2]) || throw(ArgumentError(
+            "evalLims must be finite and increasing, got $evalLims"))
         kernel isa Kernel || throw(ArgumentError(
             "kernel must be a Kernel instance such as Epanechnikov(), got $(repr(kernel))"))
+        (bandwidth > 0 && isfinite(bandwidth)) || throw(ArgumentError(
+            "bandwidth must be positive and finite, got $bandwidth"))
         return new(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
     end
 end
@@ -44,6 +51,10 @@ end
 
 # MATLAB equivalent: buildMoments.m
 function build_moments(observation::Observation, momentSettings::ConditionalMomentSettings)
+    maximumLag = maximum(momentSettings.timeShiftSamplePoints)
+    observation.N > maximumLag || throw(ArgumentError(
+        "the series has $(observation.N) samples, too few for a time shift of $maximumLag"))
+
     xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints)
 
     moment1, moment2 = kbr_moments(
