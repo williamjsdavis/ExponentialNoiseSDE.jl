@@ -42,7 +42,7 @@ function scientific_tests()
 
         # The fit uses only what build_moments computed, not the raw data
         observation = Observation(copy(X), DT_SIM)
-        momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), "Epanechnikov", 0.1)
+        momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), Epanechnikov(), 0.1)
         conditionalMoments = build_moments(observation, momentSettings)
         fill!(observation.X, NaN)
         refit = estimate_model(conditionalMoments, ModelEstimateSettings())

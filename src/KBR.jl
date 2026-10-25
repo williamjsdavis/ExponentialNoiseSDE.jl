@@ -1,14 +1,10 @@
 # Kernel Based Regression of conditional moments
 
-# Kernel Based Regression (kbr) for conditional moments
-function kbr_moments(X, timeShiftSamplePoints, nEvalPoints, evalLims, bandwidth)
-    return moment1, moment2
-end
-
 function calculate_xEvalPoints(evalLims::Tuple{Float64,Float64}, nEvalPoints::Int64)
     return range(evalLims[1], evalLims[2], length = nEvalPoints)
 end
 
+# Kernel Based Regression (kbr) for conditional moments
 function kbr_moments(X, timeShiftSamplePoints, xEvalPoints, bandwidth, kernel::Kernel)
     n = length(X)
     nτ = length(timeShiftSamplePoints)

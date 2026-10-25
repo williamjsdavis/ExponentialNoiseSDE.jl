@@ -4,14 +4,14 @@
 abstract type Kernel end
 #TODO: Add "Support" pair to Kernel? For easily checking if a value is in the support?
 
-# Epaneknikov
-struct Epaneknikov <: Kernel
+# Epanechnikov, scaled to unit variance (support [-sqrt(5), sqrt(5)])
+struct Epanechnikov <: Kernel
 end
 
 #NOTE: Maybe change this to support [-1,1]?
 const epan_scale = 3*sqrt(5)/100
 
-function (k::Epaneknikov)(x)
+function (k::Epanechnikov)(x)
     x2 = x*x
     if x2 < 5.0
         return epan_scale*(5.0 - x2)

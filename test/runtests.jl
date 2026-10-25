@@ -21,6 +21,7 @@ include("scientific.jl")
     ## Utilities and statistics
     test_utility_statistics()
     test_time_shift_validation()
+    test_kernels()
 
     ## Small dataset
     small_data_test()
@@ -45,8 +46,6 @@ include("scientific.jl")
 
     ## Package quality
     @testset "Aqua" begin
-        Aqua.test_all(ExponentialNoiseSDE; undefined_exports=false)
-        # `Epanechnikov` is exported but not defined
-        @test_broken isempty(filter(n -> !isdefined(ExponentialNoiseSDE, n), names(ExponentialNoiseSDE)))
+        Aqua.test_all(ExponentialNoiseSDE)
     end
 end
