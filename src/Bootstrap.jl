@@ -18,7 +18,8 @@ struct BootstrapModelEstimate
 end
 
 # Exported function
-function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSettings::BootstrapSettings)
+function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSettings::BootstrapSettings;
+        rng::AbstractRNG = default_rng())
     # Toggle printing
     verbose(
         bootstrapSettings.displayOutputFlag, 
@@ -34,7 +35,7 @@ function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSet
         )
     
     originalObs = modelEstimate.conditionalMoments.obervation
-    bootsrapEstimates = block_bootstrap(originalObs, estimate_model_set, bootstrapSettings)
+    bootsrapEstimates = block_bootstrap(originalObs, estimate_model_set, bootstrapSettings, rng)
 
     bootstrapStatistics = calculate_sample_statistics(modelEstimate,bootsrapEstimates,bootstrapSettings)
 
@@ -42,8 +43,8 @@ function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSet
 end
 
 # Initialize results array and create bootstrap sampler
-function block_bootstrap(obs,estimate_model_set,bootstrapSettings)
-    bootstrapSampler = make_bootstrap_index_sampler(obs.N,bootstrapSettings.blockLength)
+function block_bootstrap(obs,estimate_model_set,bootstrapSettings,rng)
+    bootstrapSampler = make_bootstrap_index_sampler(obs.N,bootstrapSettings.blockLength,rng)
     bootsrapEstimates = Array{BootstrapModelEstimate}(undef, bootstrapSettings.nSamples)
 
     # May be able to parallelize
@@ -92,8 +93,8 @@ end
 
 # Create a bootstrap sampler
 #NOTE: Terrible anon. function-based implementation...
-function make_bootstrap_index_sampler(N,blockLength)
-    rdraw2() = rand(1:N,ceil(Int, N/blockLength))
+function make_bootstrap_index_sampler(N,blockLength,rng)
+    rdraw2() = rand(rng,1:N,ceil(Int, N/blockLength))
     drawin(i) = i:(i+blockLength-1)
     moddraw(i) = mod(i-1,N) + 1
     drawN(i) = moddraw.(i[1:N])
