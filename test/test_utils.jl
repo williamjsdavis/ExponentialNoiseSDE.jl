@@ -167,18 +167,19 @@ function small_data_test()
         repeatStatistics = quietly() do
             estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1; rng=StableRNG(BOOTSTRAP_SEED))
         end
-        @test repeatStatistics.correlationEstimate == bootstrapStatistics.correlationEstimate
-        @test repeatStatistics.driftEstimate == bootstrapStatistics.driftEstimate
-        @test repeatStatistics.noiseEstimate == bootstrapStatistics.noiseEstimate
+        @test isequal(repeatStatistics.samples.correlationEstimate, bootstrapStatistics.samples.correlationEstimate)
+        @test isequal(repeatStatistics.samples.driftEstimate, bootstrapStatistics.samples.driftEstimate)
+        @test isequal(repeatStatistics.samples.noiseEstimate, bootstrapStatistics.samples.noiseEstimate)
     end
     @testset "BootstrapStatistics" begin
-        @test size(bootstrapStatistics.correlationEstimate[:mean]) == ()
-        @test size(bootstrapStatistics.correlationEstimate[:percentiles95]) == (2,)
-        @test size(bootstrapStatistics.modelError[:mean]) == ()
-        @test size(bootstrapStatistics.modelError[:percentiles95]) == (2,)
-        @test size(bootstrapStatistics.driftEstimate[:mean]) == (nEvalPoints,)
-        @test size(bootstrapStatistics.driftEstimate[:percentiles95]) == (nEvalPoints,)
-        @test size(bootstrapStatistics.driftEstimate[:percentiles95][1]) == (2,)
+        @test bootstrapStatistics.correlationEstimate.mean isa Float64
+        @test bootstrapStatistics.modelError.lower95 isa Float64
+        @test size(bootstrapStatistics.driftEstimate.mean) == (nEvalPoints,)
+        @test size(bootstrapStatistics.noiseEstimate.upper95) == (nEvalPoints,)
+        # The resampled estimates are kept, one column per resample
+        @test size(bootstrapStatistics.samples.correlationEstimate) == (7,)
+        @test size(bootstrapStatistics.samples.driftEstimate) == (nEvalPoints, 7)
+        @test bootstrapStatistics.correlationEstimate.mean ≈ sum(bootstrapStatistics.samples.correlationEstimate)/7
     end
     @testset "Bootstrap over many seeds" begin
         # Short resampled series can give a correlation time of exactly 0, which
@@ -240,9 +241,9 @@ function test_points_without_data()
         # The bootstrap completes, with NaN percentiles only where there is no data
         bootstrapStatistics = @test_logs (:warn, r"No data") match_mode=:any estimate_bootstrap_statistics(
             modelEstimate, BootstrapSettings(nSamples=5); rng=StableRNG(BOOTSTRAP_SEED))
-        driftPercentiles = bootstrapStatistics.driftEstimate[:percentiles95]
-        @test all(all.(isnan, driftPercentiles[noData]))
-        @test all(all.(isfinite, driftPercentiles[.!noData]))
+        driftSummary = bootstrapStatistics.driftEstimate
+        @test all(isnan, driftSummary.lower95[noData]) && all(isnan, driftSummary.upper95[noData])
+        @test all(isfinite, driftSummary.lower95[.!noData]) && all(isfinite, driftSummary.upper95[.!noData])
     end
 end
 
@@ -372,26 +373,63 @@ end
 # Test bootstrap summary statistics on hand-made samples
 function test_bootstrap_statistics()
     @testset "Bootstrap statistics" begin
-        # A model estimate, for the evaluation grid and original estimates
+        # A model estimate, for the original estimates
         X = readdlm(datafile("exampleData.txt"))[1:5000]
         modelEstimate = estimate_model(Observation(X, 0.0050),
             ConditionalMomentSettings(collect(1:6), 3, (-0.2,0.2), Epanechnikov(), 0.1),
             ModelEstimateSettings())
 
         # Skewed samples, with mean 2.2 and median 0
-        sampleValues = [0.0, 0.0, 0.0, 1.0, 10.0]
-        modelError = ExponentialNoiseSDE.ModelError(0.0, 0.0, 0.0)
-        samples = [ExponentialNoiseSDE.BootstrapModelEstimate(v, fill(v, 3), fill(2v, 3), modelError)
-            for v in sampleValues]
-        statistics = ExponentialNoiseSDE.calculate_sample_statistics(modelEstimate, samples,
-            BootstrapSettings(biasCorrection=false))
+        v = [0.0, 0.0, 0.0, 1.0, 10.0]
+        samples = ExponentialNoiseSDE.BootstrapSamples(v, repeat(v', 3), repeat(2v', 3), v)
+        summarize(biasCorrection) = ExponentialNoiseSDE.summarize_bootstrap(
+            modelEstimate, samples, BootstrapSettings(biasCorrection=biasCorrection))
 
-        @test statistics.correlationEstimate[:median] == 0.0
-        @test statistics.correlationEstimate[:mean] ≈ 2.2
-        @test statistics.driftEstimate[:median] == zeros(3)
-        @test statistics.driftEstimate[:mean] ≈ fill(2.2, 3)
-        @test statistics.noiseEstimate[:median] == zeros(3)
-        @test statistics.noiseEstimate[:mean] ≈ fill(4.4, 3)
+        statistics = summarize(false)
+        @test statistics.correlationEstimate.median == 0.0
+        @test statistics.correlationEstimate.mean ≈ 2.2
+        @test statistics.driftEstimate.median == zeros(3)
+        @test statistics.driftEstimate.mean ≈ fill(2.2, 3)
+        @test statistics.noiseEstimate.median == zeros(3)
+        @test statistics.noiseEstimate.mean ≈ fill(4.4, 3)
+        @test statistics.correlationEstimate.lower95 == quantile(v, 0.025)
+        @test statistics.correlationEstimate.upper95 == quantile(v, 0.975)
+
+        # Bias correction shifts only the interval, centring the samples on the
+        # original estimate
+        θ = modelEstimate.correlationEstimate
+        corrected = summarize(true)
+        @test corrected.correlationEstimate.mean == statistics.correlationEstimate.mean
+        @test corrected.correlationEstimate.lower95 ≈ quantile(v .- (2.2 - θ), 0.025)
+        @test corrected.correlationEstimate.upper95 ≈ quantile(v .- (2.2 - θ), 0.975)
+        @test corrected.modelError.lower95 == statistics.modelError.lower95
+    end
+end
+
+# Test the block bootstrap resampling
+function test_bootstrap_resampling()
+    @testset "Bootstrap resampling" begin
+        # Circular blocks of consecutive indices, cut to the series length
+        indices = ExponentialNoiseSDE.block_bootstrap_indices(StableRNG(3), 10, 4)
+        @test length(indices) == 10
+        @test all(in(1:10), indices)
+        for blockStart in (1, 5, 9), k in 1:min(3, 10 - blockStart)
+            @test indices[blockStart + k] == mod(indices[blockStart] + k - 1, 10) + 1
+        end
+
+        # Warnings from the resample fits are reported once per kind, with a count
+        X = readdlm(datafile("exampleData.txt"))[1:1000]
+        modelEstimate = estimate_model(Observation(X, 0.0050),
+            ConditionalMomentSettings(collect(1:6), 5, (-0.1,0.1), Epanechnikov(), 0.05),
+            ModelEstimateSettings())
+        logs, _ = Test.collect_test_logs() do
+            estimate_bootstrap_statistics(modelEstimate, BootstrapSettings(blockLength=100, nSamples=100);
+                rng=StableRNG(BOOTSTRAP_SEED))
+        end
+        warnings = filter(log -> log.level == Logging.Warn, logs)
+        @test !isempty(warnings)
+        @test all(log -> occursin(r"^\d+ of 100 bootstrap fits: ", log.message), warnings)
+        @test length(warnings) == length(unique(log -> split(log.message, ": ", limit=2)[2][1:20], warnings))
     end
 end
 
