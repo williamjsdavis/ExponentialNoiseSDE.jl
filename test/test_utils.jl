@@ -155,13 +155,17 @@ function get_default_estimation_settings()
     )
     
     ## Model estimates
-    # Settings
-    modelSettings = ModelEstimateSettings()
+    # Settings: MATLAB's fgIter runs exactly one fixed-point iteration, so
+    # comparisons against MATLAB pin the iteration count rather than rely on
+    # the stopping rule
+    modelSettings = ModelEstimateSettings(
+        functionIterateMethod = SmoothedFiniteDiff(functionIterMax = 1)
+    )
 
     return momentSettings, modelSettings
 end
 
-# Get estimated model for a large amount of data (using default settings)
+# Get estimated model for a large amount of data (MATLAB-equivalent settings)
 function estimate_large_model()
     # Get settings
     momentSettings, modelSettings = get_default_estimation_settings()
@@ -188,7 +192,7 @@ function estimate_large_model_unsmoothed()
     # Get settings
     momentSettings, _ = get_default_estimation_settings()
     fitSettings = ModelEstimateSettings(
-        functionIterateMethod = FiniteDiff()
+        functionIterateMethod = FiniteDiff(functionIterMax = 1)
     )
 
     ## Data
