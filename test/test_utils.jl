@@ -119,13 +119,13 @@ function small_data_test()
     ## Model estimates
 
     # Settings
-    modelSettings1 = ModelEstimateSettings(displayOutputFlag=false)
-    modelSettings2 = ModelEstimateSettings(thetaConvergenceValue=1E-5,displayOutputFlag=true)
+    modelSettings1 = ModelEstimateSettings()
+    modelSettings2 = ModelEstimateSettings(thetaMethod=FixedTheta(0.01), functionIterateMethod=FiniteDiff())
     @testset "ModelEstimateSettings" begin
-        @test modelSettings1.thetaConvergenceValue == 1E-2
-        @test modelSettings2.thetaConvergenceValue == 1E-5
-        @test modelSettings1.displayOutputFlag == false
-        @test modelSettings2.displayOutputFlag == true
+        @test modelSettings1.thetaMethod == EstimateTheta()
+        @test modelSettings1.functionIterateMethod == SmoothedFiniteDiff()
+        @test modelSettings2.thetaMethod == FixedTheta(0.01)
+        @test modelSettings2.functionIterateMethod == FiniteDiff()
     end
 
     # Estimating
@@ -148,15 +148,14 @@ function small_data_test()
     ## Bootstrapping uncertainties
 
     # Settings
-    bootstrapSettings1 = BootstrapSettings(blockLength=100, nSamples=7, displayOutputFlag=false)
+    bootstrapSettings1 = BootstrapSettings(blockLength=100, nSamples=7)
     bootstrapSettings2 = BootstrapSettings()
     @testset "BootstrapSettings" begin
         @test bootstrapSettings1.blockLength == 100
         @test bootstrapSettings1.nSamples == 7
-        @test bootstrapSettings1.displayOutputFlag == false
         @test bootstrapSettings2.blockLength == 500
         @test bootstrapSettings2.nSamples == 20
-        @test bootstrapSettings2.displayOutputFlag == true
+        @test bootstrapSettings2.biasCorrection
     end
 
     # Estimating. Short resamples of this small dataset often give negative
@@ -240,7 +239,7 @@ function test_points_without_data()
 
         # The bootstrap completes, with NaN percentiles only where there is no data
         bootstrapStatistics = @test_logs (:warn, r"No data") match_mode=:any estimate_bootstrap_statistics(
-            modelEstimate, BootstrapSettings(nSamples=5, displayOutputFlag=false); rng=StableRNG(BOOTSTRAP_SEED))
+            modelEstimate, BootstrapSettings(nSamples=5); rng=StableRNG(BOOTSTRAP_SEED))
         driftPercentiles = bootstrapStatistics.driftEstimate[:percentiles95]
         @test all(all.(isnan, driftPercentiles[noData]))
         @test all(all.(isfinite, driftPercentiles[.!noData]))
@@ -385,7 +384,7 @@ function test_bootstrap_statistics()
         samples = [ExponentialNoiseSDE.BootstrapModelEstimate(v, fill(v, 3), fill(2v, 3), modelError)
             for v in sampleValues]
         statistics = ExponentialNoiseSDE.calculate_sample_statistics(modelEstimate, samples,
-            BootstrapSettings(biasCorrection=false, displayOutputFlag=false))
+            BootstrapSettings(biasCorrection=false))
 
         @test statistics.correlationEstimate[:median] == 0.0
         @test statistics.correlationEstimate[:mean] ≈ 2.2
@@ -422,8 +421,42 @@ function test_input_validation()
             estimate_model(Observation(X, 0.0050), settings(), ModelEstimateSettings())
         end
         @test_throws ArgumentError estimate_bootstrap_statistics(modelEstimate,
-            BootstrapSettings(blockLength=2000, displayOutputFlag=false))
+            BootstrapSettings(blockLength=2000))
 
-        @test_throws ArgumentError ModelEstimateSettings(fixThetaFlag=true, fixThetaValue=-0.01)
+        @test_throws ArgumentError FixedTheta(-0.01)
+        @test_throws ArgumentError FixedTheta(Inf)
+    end
+end
+
+# Test the correlation time strategies and progress logging
+function test_settings_strategies()
+    @testset "Settings and strategies" begin
+        X = readdlm(datafile("exampleData.txt"))[:]
+        momentSettings = ConditionalMomentSettings(
+            timeShiftSamplePoints=1:15, nEvalPoints=20, evalLims=(-1.0,1.0), bandwidth=0.1)
+        @test momentSettings.kernel == Epanechnikov()
+        conditionalMoments = build_moments(Observation(X, 0.0050), momentSettings)
+
+        # Fixing theta at its estimate gives the same fit
+        estimated = estimate_model(conditionalMoments, ModelEstimateSettings())
+        fixed = estimate_model(conditionalMoments,
+            ModelEstimateSettings(thetaMethod=FixedTheta(estimated.correlationEstimate)))
+        @test fixed.correlationEstimate == estimated.correlationEstimate
+        @test fixed.driftEstimate ≈ estimated.driftEstimate rtol=1E-12
+        @test fixed.noiseEstimate ≈ estimated.noiseEstimate rtol=1E-12
+        fixedOther = estimate_model(conditionalMoments, ModelEstimateSettings(thetaMethod=FixedTheta(0.02)))
+        @test fixedOther.correlationEstimate == 0.02
+
+        # Bootstrap progress goes to the logging system, not stdout
+        printed = mktemp() do path, io
+            redirect_stdout(io) do
+                @test_logs (:debug, r"Starting") (:debug, "Bootstrap sample 1 of 2") (:debug, "Bootstrap sample 2 of 2") min_level=Logging.Debug match_mode=:any begin
+                    estimate_bootstrap_statistics(estimated, BootstrapSettings(nSamples=2); rng=StableRNG(BOOTSTRAP_SEED))
+                end
+            end
+            flush(io)
+            read(path, String)
+        end
+        @test isempty(printed)
     end
 end

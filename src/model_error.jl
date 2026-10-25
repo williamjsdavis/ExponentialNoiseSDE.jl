@@ -9,8 +9,7 @@ end
 function mean_fit_error(
     conditionalMoments::ConditionalMoments,
     thetaProperties::ThetaProperties,
-    lambdaProperties::LambdaProperties,
-    displayOutputFlag)
+    lambdaProperties::LambdaProperties)
 
     # Fit differences
     moment1Difference = conditionalMoments.moment1 - 
@@ -24,18 +23,6 @@ function mean_fit_error(
     meanAbsoluteErrorMoment2 = mean(abs, filter(isfinite, moment2Difference))
     meanAbsoluteError = 0.5*(meanAbsoluteErrorMoment1 + meanAbsoluteErrorMoment2)
 
-    if displayOutputFlag
-        #=
-        println('Absolute fit error on moments')
-        println(['Mean M^(1) fit error: ',
-            sprintf('%0.4e',meanAbsoluteError.moment1)])
-        println(['Mean M^(2) fit error: ',
-            sprintf('%0.4e',meanAbsoluteError.moment2)])
-        println(['Mean fit error: ',
-            sprintf('%0.4e',meanAbsoluteError.bothMoments)])
-        =#
-    end
-    
     return ModelError(
         meanAbsoluteErrorMoment1,
         meanAbsoluteErrorMoment2,

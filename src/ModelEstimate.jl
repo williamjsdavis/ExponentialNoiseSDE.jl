@@ -1,20 +1,9 @@
 # Estimating SDE model (drift and noise functions + correlation time)
 
 # MATLAB equivalent: FitOptionsClass.m
-struct ModelEstimateSettings
-    thetaConvergenceValue::Float64
-    functionIterateMethod
-    fixThetaFlag::Bool
-    fixThetaValue::Float64
-    keepObservation::Bool
-    displayOutputFlag::Bool
-    function ModelEstimateSettings(thetaConvergenceValue, functionIterateMethod,
-            fixThetaFlag, fixThetaValue, keepObservation, displayOutputFlag)
-        (fixThetaValue >= 0 && isfinite(fixThetaValue)) || throw(ArgumentError(
-            "fixThetaValue must be non-negative and finite, got $fixThetaValue"))
-        return new(thetaConvergenceValue, functionIterateMethod,
-            fixThetaFlag, fixThetaValue, keepObservation, displayOutputFlag)
-    end
+Base.@kwdef struct ModelEstimateSettings
+    thetaMethod::ThetaMethod = EstimateTheta()
+    functionIterateMethod::FunctionIterateMethod = SmoothedFiniteDiff()
 end
 
 # MATLAB equivalent: SPmodelClass.m
@@ -35,7 +24,7 @@ end
 # MATLAB equivalent: estimateSPmodel.m
 function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings)
     # Estimate correlation time (theta)
-    thetaEst, thetaProperties = estimate_theta(conditionalMoments, fitSettings)
+    thetaEst, thetaProperties = estimate_theta(conditionalMoments, fitSettings.thetaMethod)
 
     # Estimate drift and noise properties
     lambdaProperties = lambda_search_linear(
@@ -59,8 +48,7 @@ function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::Mod
     modelError = mean_fit_error(
         conditionalMoments,
         thetaProperties,
-        lambdaProperties,
-        fitSettings.displayOutputFlag
+        lambdaProperties
     )
 
     correlationEstimate = thetaEst

@@ -8,31 +8,38 @@ struct ThetaProperties
     lambdaStar::Array{Float64,1}
 end
 
-# Estimating theta, from the autocorrelation increments at the moment time shifts
-function estimate_theta(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings)
-    timeShifts = conditionalMoments.timeShifts
-    dA = conditionalMoments.dA
-    maximumLag = maximum(conditionalMoments.momentSettings.timeShiftSamplePoints)
+# Correlation time (theta) methods
+abstract type ThetaMethod end
 
-    # This can be done better with multiple dispatch
-    if fitSettings.fixThetaFlag
-        # Fixed theta method
-        thetaEst, thetaProperties = theta_fixed(
-            dA,
-            timeShifts,
-            maximumLag,
-            fitSettings.fixThetaValue
-        )
-    else
-        # Estimating theta
-        thetaEst, thetaProperties = theta_search(
-            dA,
-            timeShifts,
-            maximumLag
-        )
+# Estimate theta from the autocorrelation increments
+struct EstimateTheta <: ThetaMethod end
+
+# Use a given theta
+struct FixedTheta <: ThetaMethod
+    theta::Float64
+    function FixedTheta(theta)
+        (theta >= 0 && isfinite(theta)) || throw(ArgumentError(
+            "the fixed correlation time must be non-negative and finite, got $theta"))
+        return new(theta)
     end
+end
 
-    return thetaEst, thetaProperties
+# Estimating theta, from the autocorrelation increments at the moment time shifts
+function estimate_theta(conditionalMoments::ConditionalMoments, ::EstimateTheta)
+    return theta_search(
+        conditionalMoments.dA,
+        conditionalMoments.timeShifts,
+        maximum(conditionalMoments.momentSettings.timeShiftSamplePoints)
+    )
+end
+
+function estimate_theta(conditionalMoments::ConditionalMoments, thetaMethod::FixedTheta)
+    return theta_fixed(
+        conditionalMoments.dA,
+        conditionalMoments.timeShifts,
+        maximum(conditionalMoments.momentSettings.timeShiftSamplePoints),
+        thetaMethod.theta
+    )
 end
 
 function theta_fixed(dA,timeShifts,nuMax,thetaEst)
