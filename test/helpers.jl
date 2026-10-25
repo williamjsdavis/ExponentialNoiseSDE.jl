@@ -14,7 +14,7 @@ function fit_model(X, dt;
         bandwidth = 0.1,
         method = SmoothedFiniteDiff())
     momentSettings = ConditionalMomentSettings(
-        collect(lags), nEvalPoints, evalLims, "Epanechnikov", bandwidth)
+        collect(lags), nEvalPoints, evalLims, Epanechnikov(), bandwidth)
     fitSettings = ModelEstimateSettings(functionIterateMethod = method)
     return estimate_model(Observation(X, dt), momentSettings, fitSettings)
 end

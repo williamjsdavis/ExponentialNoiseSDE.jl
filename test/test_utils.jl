@@ -20,10 +20,40 @@ function test_utility_statistics()
     end
 end
 
+# A second kernel, to check the kernel setting is the one used
+struct BoxKernel <: ExponentialNoiseSDE.Kernel end
+(::BoxKernel)(x) = abs(x) < 1 ? 0.5 : 0.0
+
+# Test kernel functions and kernel selection
+function test_kernels()
+    @testset "Kernels" begin
+        # Epanechnikov: normalised, unit variance, support [-sqrt(5), sqrt(5)]
+        k = Epanechnikov()
+        x = range(-3, 3, length=60001)
+        @test sum(k.(x))*step(x) ≈ 1 rtol=1E-6
+        @test sum(x.^2 .* k.(x))*step(x) ≈ 1 rtol=1E-6
+        @test k(sqrt(5) + 1E-9) == 0.0
+
+        # The kernel in the settings is used
+        X = DelimitedFiles.readdlm(datafile("exampleData.txt"))[1:5000]
+        obs = Observation(X, 0.0050)
+        settings(kernel) = ConditionalMomentSettings(collect(1:6), 5, (-0.5,0.5), kernel, 0.1)
+        epanMoments = build_moments(obs, settings(Epanechnikov()))
+        boxMoments = build_moments(obs, settings(BoxKernel()))
+        @test epanMoments.moment1 != boxMoments.moment1
+        # With the box kernel, moment 1 at x = 0 for a shift of 1 is the plain
+        # mean of the increments that start within one bandwidth of 0
+        near = findall(i -> abs(X[i]) < 0.1, 1:length(X)-1)
+        @test boxMoments.moment1[1,3] ≈ sum(X[near .+ 1] .- X[near])/length(near)
+
+        @test_throws ArgumentError settings("Epanechnikov")
+    end
+end
+
 # Test validation of the time shift lags
 function test_time_shift_validation()
     @testset "Time shift validation" begin
-        settings(lags) = ConditionalMomentSettings(lags, 5, (-1.0,1.0), "Epanechnikov", 0.1)
+        settings(lags) = ConditionalMomentSettings(lags, 5, (-1.0,1.0), Epanechnikov(), 0.1)
         @test settings(collect(1:4)).timeShiftSamplePoints == 1:4
         @test settings(2:2:30).timeShiftSamplePoints == 2:2:30
         @test_throws ArgumentError settings(collect(15:-1:1)) # Not increasing
@@ -52,7 +82,7 @@ function small_data_test()
     nTimeShiftSamplePoints = 6
     nEvalPoints = 5
     xEvalLims = (-0.1,0.1)
-    kernel = "Epanechnikov"
+    kernel = Epanechnikov()
     bandwidth = 0.01
 
     # Variables/attributes
@@ -166,7 +196,7 @@ function get_default_estimation_settings()
     nTimeShiftSamplePoints = 15
     nEvalPoints = 20
     xEvalLims = (-1.0,1.0)
-    kernel = "Epanechnikov"
+    kernel = Epanechnikov()
     bandwidth = 0.1
     
     # Variables/attributes

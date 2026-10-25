@@ -6,10 +6,12 @@ struct ConditionalMomentSettings
     timeShiftSamplePoints::Array{Int64,1}
     nEvalPoints::Int64
     evalLims::Tuple{Float64,Float64}
-    kernel::String # For now
+    kernel::Kernel
     bandwidth::Float64
     function ConditionalMomentSettings(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
         check_time_shifts(timeShiftSamplePoints)
+        kernel isa Kernel || throw(ArgumentError(
+            "kernel must be a Kernel instance such as Epanechnikov(), got $(repr(kernel))"))
         return new(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
     end
 end
@@ -41,17 +43,15 @@ struct ConditionalMoments
 end
 
 # MATLAB equivalent: buildMoments.m
-# Only Epan kernel so far
 function build_moments(observation::Observation, momentSettings::ConditionalMomentSettings)
     xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints)
 
-    kernel = Epaneknikov()
     moment1, moment2 = kbr_moments(
         observation.X,
         momentSettings.timeShiftSamplePoints,
         xEvalPoints,
         momentSettings.bandwidth,
-        kernel
+        momentSettings.kernel
     )
 
     # Autocorrelation increments at the same time shifts, for fitting the
