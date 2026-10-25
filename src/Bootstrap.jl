@@ -7,6 +7,14 @@ struct BootstrapSettings
     nSamples::Int64
     biasCorrection::Bool
     displayOutputFlag::Bool
+    function BootstrapSettings(blockLength, nSamples, biasCorrection, displayOutputFlag)
+        blockLength >= 1 || throw(ArgumentError(
+            "blockLength must be at least 1, got $blockLength"))
+        # Standard deviations need at least 2 samples
+        nSamples >= 2 || throw(ArgumentError(
+            "nSamples must be at least 2, got $nSamples"))
+        return new(blockLength, nSamples, biasCorrection, displayOutputFlag)
+    end
 end
 
 # A single bootstrap model estimate
@@ -20,6 +28,12 @@ end
 # Exported function
 function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSettings::BootstrapSettings;
         rng::AbstractRNG = default_rng())
+    # A block as long as the series only rotates it, which underestimates
+    # the uncertainty
+    originalObs = modelEstimate.conditionalMoments.obervation
+    bootstrapSettings.blockLength < originalObs.N || throw(ArgumentError(
+        "blockLength ($(bootstrapSettings.blockLength)) must be shorter than the series ($(originalObs.N) samples)"))
+
     # Toggle printing
     verbose(
         bootstrapSettings.displayOutputFlag, 
@@ -33,8 +47,7 @@ function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSet
             modelEstimate.conditionalMoments.momentSettings, 
             modelEstimate.fitSettings
         )
-    
-    originalObs = modelEstimate.conditionalMoments.obervation
+
     bootsrapEstimates = block_bootstrap(originalObs, estimate_model_set, bootstrapSettings, rng)
 
     bootstrapStatistics = calculate_sample_statistics(modelEstimate,bootsrapEstimates,bootstrapSettings)
