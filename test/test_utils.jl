@@ -526,3 +526,19 @@ function test_api()
         @test occursin("converged", sprint(show, MIME"text/plain"(), modelEstimate))
     end
 end
+
+# Test the conditional moments against the naive reference implementation
+function test_moments_reference()
+    @testset "Moments match the naive implementation" begin
+        X = readdlm(datafile("exampleData.txt"))[1:10000]
+        for lags in (collect(1:15), [1,3,7,20]), lims in ((-1.0,1.0), (-3.0,3.0)),
+                bandwidth in (0.01, 0.1), kernel in (Epanechnikov(), BoxKernel())
+            x = range(lims[1], lims[2], length=20)
+            moment1, moment2 = ExponentialNoiseSDE.kbr_moments(X, lags, x, bandwidth, kernel)
+            reference1, reference2 = reference_kbr_moments(X, lags, x, bandwidth, kernel)
+            # Same additions in the same order, so identical (NaN where no data)
+            @test isequal(moment1, reference1)
+            @test isequal(moment2, reference2)
+        end
+    end
+end
