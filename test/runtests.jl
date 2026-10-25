@@ -32,6 +32,7 @@ include("scientific.jl")
     test_bootstrap_resampling()
     test_input_validation()
     test_settings_strategies()
+    test_api()
 
     ## Small dataset
     small_data_test()

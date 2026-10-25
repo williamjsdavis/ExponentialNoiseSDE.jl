@@ -45,15 +45,20 @@ struct ConditionalMoments
     xEvalPoints::Array{Float64,1}
     timeShifts::Array{Float64,1} # Lags in units of time, one per moment row
     dA::Array{Float64,1} # Autocorrelation increments at the time shifts
-    obervation::Observation
-    momentSettings
+    observation::Observation
+    momentSettings::ConditionalMomentSettings
 end
+
+Base.show(io::IO, conditionalMoments::ConditionalMoments) = print(io,
+    "ConditionalMoments($(length(conditionalMoments.timeShifts)) time shifts × ",
+    "$(length(conditionalMoments.xEvalPoints)) evaluation points in ",
+    "[$(first(conditionalMoments.xEvalPoints)), $(last(conditionalMoments.xEvalPoints))])")
 
 # MATLAB equivalent: buildMoments.m
 function build_moments(observation::Observation, momentSettings::ConditionalMomentSettings)
     maximumLag = maximum(momentSettings.timeShiftSamplePoints)
-    observation.N > maximumLag || throw(ArgumentError(
-        "the series has $(observation.N) samples, too few for a time shift of $maximumLag"))
+    length(observation) > maximumLag || throw(ArgumentError(
+        "the series has $(length(observation)) samples, too few for a time shift of $maximumLag"))
 
     xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints)
 

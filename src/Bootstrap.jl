@@ -29,9 +29,9 @@ function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSet
         rng::AbstractRNG = default_rng())
     # A block as long as the series only rotates it, which underestimates
     # the uncertainty
-    observation = modelEstimate.conditionalMoments.obervation
-    bootstrapSettings.blockLength < observation.N || throw(ArgumentError(
-        "blockLength ($(bootstrapSettings.blockLength)) must be shorter than the series ($(observation.N) samples)"))
+    observation = modelEstimate.conditionalMoments.observation
+    bootstrapSettings.blockLength < length(observation) || throw(ArgumentError(
+        "blockLength ($(bootstrapSettings.blockLength)) must be shorter than the series ($(length(observation)) samples)"))
 
     @debug "Starting correlated process regression and bootstrap iterations" bootstrapSettings
     samples = bootstrap_samples(
@@ -59,7 +59,7 @@ function bootstrap_samples(observation, momentSettings, fitSettings, bootstrapSe
     with_logger(warningCounter) do
         for i in 1:nSamples
             @debug "Bootstrap sample $i of $nSamples"
-            indices = block_bootstrap_indices(rng, observation.N, bootstrapSettings.blockLength)
+            indices = block_bootstrap_indices(rng, length(observation), bootstrapSettings.blockLength)
             estimate = estimate_model(
                 Observation(observation.X[indices], observation.dt),
                 momentSettings,

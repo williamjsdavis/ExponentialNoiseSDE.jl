@@ -28,10 +28,10 @@ for seed in 1:nSeeds
         continue
     end
     m = fit_model(X, DT)
-    x = eval_points_of(m); inner = abs.(x) .<= 0.6
-    push!(θErr, abs(theta_of(m) - θTRUE)/θTRUE)
-    push!(fErr, maximum(abs, drift_of(m)[inner] .- f.(x[inner])))
-    push!(gErr, maximum(abs, noise_of(m)[inner] .- g.(x[inner])))
+    x = eval_points(m); inner = abs.(x) .<= 0.6
+    push!(θErr, abs(correlation_time(m) - θTRUE)/θTRUE)
+    push!(fErr, maximum(abs, drift(m)[inner] .- f.(x[inner])))
+    push!(gErr, maximum(abs, noise(m)[inner] .- g.(x[inner])))
 end
 q(v) = quantile(v, 0.99)
 println("Diverged simulations skipped: $nDiverged")
@@ -51,7 +51,7 @@ for seed in 1:nSeeds
         e isa DomainError || rethrow()
         continue
     end
-    push!(θErrSparse, abs(theta_of(fit_model(X, DT; lags = 2:2:30)) - θTRUE)/θTRUE)
+    push!(θErrSparse, abs(correlation_time(fit_model(X, DT; lags = 2:2:30)) - θTRUE)/θTRUE)
 end
 println("  θ relative error, lags 2:2:30: median $(round(median(θErrSparse), sigdigits=3)), 99% $(round(q(θErrSparse), sigdigits=3)) -> rtol $(round(1.5q(θErrSparse), sigdigits=2)); seed 1: $(round(θErrSparse[1], sigdigits=3))")
 
@@ -65,6 +65,6 @@ varErr = [abs(var(simulate_process(StableRNG(s), fLin, gLin, θTRUE, DT, 200_000
 println("Linear process Var X relative error (N=200000): median $(round(median(varErr), sigdigits=3)), 99% $(round(q(varErr), sigdigits=3)) -> rtol $(round(1.5q(varErr), sigdigits=2)); seed 1: $(round(varErr[1], sigdigits=3))")
 
 # Spread of θ̂ across seeds should shrink like 1/sqrt(N)
-spread(n, seeds) = std([theta_of(fit_model(simulate_process(StableRNG(s), fLin, gLin, θTRUE, DT, n), DT)) for s in seeds])
+spread(n, seeds) = std([correlation_time(fit_model(simulate_process(StableRNG(s), fLin, gLin, θTRUE, DT, n), DT)) for s in seeds])
 ratios = [spread(160_000, (8k+1):(8k+8)) / spread(10_000, (8k+1):(8k+8)) for k in 0:9]
 println("Spread ratio std(θ̂ | 16N)/std(θ̂ | N), 10 groups of 8 seeds: ", round.(ratios, digits=3), "  (expect ≈ 0.25)")
