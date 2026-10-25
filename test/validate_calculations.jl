@@ -116,13 +116,14 @@ function validate_unsmoothed_functions(modelEstimateUnsmoothed,modelEstimate)
     # Drift function (estimate)
     driftEstimateMATLAB = DelimitedFiles.readdlm(datafile("driftEstimateNoSmoothMATLAB.txt"))[:]
 
-    driftEstimteTol = 0.15
+    # Agreement achieved: drift 4.7e-8, noise 1.2e-8
+    driftEstimteTol = 1E-6
     driftEstimateError = abs.(modelEstimateUnsmoothed.driftEstimate .- driftEstimateMATLAB)
 
     # Noise function (estimate)
     noiseEstimateMATLAB = DelimitedFiles.readdlm(datafile("noiseEstimateNoSmoothMATLAB.txt"))[:]
 
-    noiseEstimteTol = 0.03
+    noiseEstimteTol = 1E-6
     noiseEstimateError = abs.(modelEstimateUnsmoothed.noiseEstimate .- noiseEstimateMATLAB)
 
     @testset "MATLAB validation: unsmoothed function properties" begin
