@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below, and cite Lehle & Peinke (2018) for the method."
+title: "ExponentialNoiseSDE.jl"
+abstract: "Estimation of stochastic differential equations driven by exponentially correlated noise, with block bootstrap uncertainties."
+authors:
+  - family-names: Davis
+    given-names: William
+version: 0.2.0
+license: MIT
+repository-code: "https://github.com/williamjsdavis/ExponentialNoiseSDE.jl"
+references:
+  - type: article
+    authors:
+      - family-names: Lehle
+        given-names: Bernd
+      - family-names: Peinke
+        given-names: Joachim
+    title: "Analyzing a stochastic process driven by Ornstein-Uhlenbeck noise"
+    journal: "Physical Review E"
+    volume: 97
+    issue: 1
+    start: "012113"
+    year: 2018
+    doi: "10.1103/PhysRevE.97.012113"

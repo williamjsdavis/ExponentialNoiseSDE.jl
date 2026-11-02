@@ -1,168 +1,59 @@
-```julia
-using ExponentialNoiseSDE
-using DelimitedFiles
-using Plots
-using Plots.Measures
+# Example
+
+[`example.jl`](example.jl) estimates the model for the example data in
+`test/data/exampleData.txt`, with bootstrap uncertainties, and writes the
+figures below. From the repository root:
+
+```sh
+julia --project=example -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+julia --project=example example/example.jl
 ```
 
+The data are 50 000 samples of the model simulated with time step
+`dt = 0.005`, correlation time `θ = 0.01`, drift `f(x) = -2.5x` and noise
+`g(x) = 1 + x²/4` for `x > 0` (`g = 1` otherwise). They are the
+`exampleDataB.txt` series from the MATLAB package
+[`secn-PR`](https://github.com/williamjsdavis/secn-PR).
+
+![Time series](timeseries.svg)
+
+## Estimate
 
 ```julia
-filename = "/Users/w1davis/.julia/dev/ExponentialNoiseSDE/test/data/exampleData.txt"
-
-X_data = DelimitedFiles.readdlm(filename)[:]
-N_data = length(X_data)
-obs = Observation(
-    X_data,
-    0.0050
-);
-```
-
-
-```julia
-plot(X_data[1:10000])
-```
-
-
-
-
-    
-![svg](output_4_0.svg)
-    
-
-
-
-
-```julia
-## Conditional moment settings
-nTimeShiftSamplePoints = 15
-nEvalPoints = 20
-xEvalLims = (-1.0,1.0)
-kernel = "Epanechnikov"
-bandwidth = 0.1
-
-# Variables/attributes
-timeShiftSamplePoints = collect(1:nTimeShiftSamplePoints)
-momentSize = (nTimeShiftSamplePoints, nEvalPoints)
-
+observation = Observation(X, 0.005)
 momentSettings = ConditionalMomentSettings(
-    timeShiftSamplePoints,
-    nEvalPoints,
-    xEvalLims,
-    kernel,
-    bandwidth,
-);
-```
-
-
-```julia
-conditionalMoments = build_moments(obs, momentSettings);
-```
-
-
-```julia
-modelSettings1 = ModelEstimateSettings(displayOutputFlag=false)
-
-# Estimating
-modelEstimate = estimate_model(conditionalMoments, modelSettings1);
-```
-
-
-```julia
-bootstrapSettings1 = BootstrapSettings(nSamples=200)
-
-bootstrapStatistics = estimate_bootstrap_statistics(modelEstimate,bootstrapSettings1);
-```
-
-    Starting correlated process regression and bootstrap iterations
-    Sample: 1
-    Sample: 2
-    ...
-    Sample: 199
-    Sample: 200
-
-
-## Plotting
-
-
-```julia
-x = modelEstimate.conditionalMoments.xEvalPoints
-
-drift_true(x) = -2.5*x
-noise_true(x) = x > 0 ? 1 + x^2/4 : 1
-;
-```
-
-
-```julia
-p1 = scatter(x,modelEstimate.driftEstimate,label="Estimate")
-plot!(drift_true,label="True")
-plot!(title="Drift function")
-plot!(xlabel="x")
-plot!(ylabel="f(x)")
-
-p2 = scatter(x,modelEstimate.noiseEstimate,label="")
-plot!(noise_true,label="")
-plot!(title="Noise function")
-plot!(xlabel="x")
-plot!(ylabel="g(x)")
-plot!(ylim=(0.75,Inf))
-
-plot(p1,p2,size=(900,400))
-```
-
-
-
-
-    
-![svg](output_11_0.svg)
-    
-
-
-
-
-```julia
-lower_b(var) = var[:percentiles95] .|> first
-upper_b(var) = var[:percentiles95] .|> last
-;
-```
-
-
-```julia
-p1 = scatter(x,modelEstimate.driftEstimate,label="Best estimate")
-plot!(drift_true,label="True")
-plot!(x, 
-    lower_b(bootstrapStatistics.driftEstimate), 
-    fillrange = upper_b(bootstrapStatistics.driftEstimate), 
-    linealpha = 0.0, color=5, fillalpha = 0.15, label = "95% CI."
+    timeShiftSamplePoints = 1:15,
+    nEvalPoints = 20,
+    evalLims = (-1.0, 1.0),
+    bandwidth = 0.1,
 )
-plot!(title="Drift function")
-plot!(xlabel="x")
-plot!(ylabel="f(x)")
-
-p2 = scatter(x,modelEstimate.noiseEstimate,label="")
-plot!(noise_true,label="")
-plot!(x, 
-    lower_b(bootstrapStatistics.noiseEstimate), 
-    fillrange = upper_b(bootstrapStatistics.noiseEstimate), 
-    linealpha = 0.0, color=5, fillalpha = 0.15, label = ""
-)
-plot!(title="Noise function")
-plot!(xlabel="x")
-plot!(ylabel="g(x)")
-
-plot(p1,p2,size=(900,400),bottom_margin = 10mm,left_margin = 10mm)
+modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSettings())
 ```
 
+```
+ModelEstimate
+  correlation time θ: 0.0102476
+  evaluation points:  20 in [-1.0, 1.0]
+  drift range:        (-2.076, 2.144)
+  noise range:        (1.002, 1.224)
+  iteration:          converged in 4 iteration(s)
+  mean fit error:     6.898e-5
+```
 
+The estimated correlation time is within 2.5% of the true `θ = 0.01`.
+`eval_points`, `drift` and `noise` give the estimates at each point:
 
+![Drift and noise estimates](estimates.svg)
 
-    
-![svg](output_13_0.svg)
-    
-
-
-
+## Bootstrap uncertainties
 
 ```julia
-
+bootstrapStatistics = estimate_bootstrap_statistics(
+    modelEstimate, BootstrapSettings(nSamples=200); rng=Xoshiro(1))
+lower, upper = drift(bootstrapStatistics).lower95, drift(bootstrapStatistics).upper95
 ```
+
+![Drift and noise with 95% intervals](bootstrap.svg)
+
+The bootstrap joins blocks of the series end to end, which biases the
+resampled estimates (see "Known limitations" in the documentation).

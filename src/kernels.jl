@@ -2,16 +2,25 @@
 #TODO: Add kernel scale into struct
 
 abstract type Kernel end
-#TODO: Add "Support" pair to Kernel? For easily checking if a value is in the support?
 
-# Epaneknikov
-struct Epaneknikov <: Kernel
+# Kernels are zero for |x| beyond their support radius (Inf if unbounded)
+support_radius(::Kernel) = Inf
+
+"""
+    Epanechnikov()
+
+Epanechnikov kernel scaled to unit variance, `K(u) = 3/(20√5) (5 - u²)` for
+`|u| < √5` and zero otherwise. The default kernel for conditional moments.
+"""
+struct Epanechnikov <: Kernel
 end
+
+support_radius(::Epanechnikov) = sqrt(5.0)
 
 #NOTE: Maybe change this to support [-1,1]?
 const epan_scale = 3*sqrt(5)/100
 
-function (k::Epaneknikov)(x)
+function (k::Epanechnikov)(x)
     x2 = x*x
     if x2 < 5.0
         return epan_scale*(5.0 - x2)

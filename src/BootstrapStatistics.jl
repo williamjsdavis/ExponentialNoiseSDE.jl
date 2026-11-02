@@ -1,78 +1,77 @@
 ## Bootstrap statistics for uncertainties
 # MATLAB equivalent: SPbootstrapClass.m
 
+# Summary of the bootstrap samples of an estimate. With bias correction, the
+# 95% interval comes from the samples shifted so their mean is the original
+# estimate; the mean, median and standard deviation are of the samples as drawn.
+struct BootstrapSummary{T}
+    mean::T
+    median::T
+    std::T
+    lower95::T
+    upper95::T
+end
+
 struct BootstrapStatistics
-    correlationEstimate
-    driftEstimate
-    noiseEstimate
-    modelError
+    correlationEstimate::BootstrapSummary{Float64}
+    driftEstimate::BootstrapSummary{Vector{Float64}}
+    noiseEstimate::BootstrapSummary{Vector{Float64}}
+    modelError::BootstrapSummary{Float64}
+    samples::BootstrapSamples
     bootstrapSettings::BootstrapSettings
 end
 
+# Summaries of the correlation time, drift and noise
+correlation_time(bootstrapStatistics::BootstrapStatistics) = bootstrapStatistics.correlationEstimate
+drift(bootstrapStatistics::BootstrapStatistics) = bootstrapStatistics.driftEstimate
+noise(bootstrapStatistics::BootstrapStatistics) = bootstrapStatistics.noiseEstimate
 
-# Pack bootstrap results into a dict
-function generate_statistics_dict(varMean,varMedian,varStd,varPrc)
-    return Dict(
-        :mean=>varMean,
-        :median=>varMedian,
-        :std=>varStd,
-        :percentiles95=>varPrc,
+function Base.show(io::IO, bootstrapStatistics::BootstrapStatistics)
+    θ = correlation_time(bootstrapStatistics)
+    r(x) = round(x, sigdigits=4)
+    print(io, "BootstrapStatistics($(length(bootstrapStatistics.samples.correlationEstimate)) resamples, ",
+        "θ = $(r(θ.mean)), 95% interval [$(r(θ.lower95)), $(r(θ.upper95))])")
+end
+
+# Summarize the samples of each estimate
+function summarize_bootstrap(
+        modelEstimate::ModelEstimate,
+        samples::BootstrapSamples,
+        bootstrapSettings::BootstrapSettings)
+    biasCorrection = bootstrapSettings.biasCorrection
+    return BootstrapStatistics(
+        summarize(samples.correlationEstimate, modelEstimate.correlationEstimate, biasCorrection),
+        summarize(samples.driftEstimate, modelEstimate.driftEstimate, biasCorrection),
+        summarize(samples.noiseEstimate, modelEstimate.noiseEstimate, biasCorrection),
+        summarize(samples.meanAbsoluteError, NaN, false),
+        samples,
+        bootstrapSettings
     )
 end
 
-# Calculate sample statistics from bootstrap samples
-function calculate_sample_statistics(
-        modelEstimate::ModelEstimate,
-        bootstrapEstimates::Array{BootstrapModelEstimate},
-        bootstrapSettings::BootstrapSettings)
-    # Samples
-    nEvalPoints = modelEstimate.conditionalMoments.momentSettings.nEvalPoints
-    corrSamples = broadcast(x->x.correlationEstimate, bootstrapEstimates)
-    errorSamples = broadcast(x->x.modelError.meanAbsoluteError, bootstrapEstimates)
-    get_drift_samples = j->broadcast(x->x.driftEstimate[j], bootstrapEstimates)
-    get_noise_samples = j->broadcast(x->x.noiseEstimate[j], bootstrapEstimates)
+# Summary of the samples of one value. Uses the finite samples, since
+# resamples with no data at an evaluation point give NaN there.
+function summarize(samples::AbstractVector, original::Real, biasCorrection::Bool)
+    finiteSamples = filter(isfinite, samples)
+    isempty(finiteSamples) && return BootstrapSummary(NaN, NaN, NaN, NaN, NaN)
 
-    # Mean
-    corrMean = mean(corrSamples)
-    errorMean = mean(errorSamples)
-    driftMean = broadcast(i->mean(get_drift_samples(i)),1:nEvalPoints)
-    noiseMean = broadcast(i->mean(get_noise_samples(i)),1:nEvalPoints)
+    sampleMean = mean(finiteSamples)
+    # Bias correction shifts the samples so their mean is the original estimate
+    intervalSamples = biasCorrection ? finiteSamples .- (sampleMean - original) : finiteSamples
+    lower95, upper95 = all(isfinite, intervalSamples) ?
+        quantile(intervalSamples, [0.025, 0.975]) : (NaN, NaN)
 
-    # Median
-    corrMedian = median(corrSamples)
-    errorMedian = median(errorSamples)
-    driftMedian = broadcast(i->mean(get_drift_samples(i)),1:nEvalPoints)
-    noiseMedian = broadcast(i->mean(get_noise_samples(i)),1:nEvalPoints)
-    
-    # Standard deviations
-    corrStd = std(corrSamples)
-    errorStd = std(errorSamples)
-    driftStd = broadcast(i->std(get_drift_samples(i)),1:nEvalPoints)
-    noiseStd = broadcast(i->std(get_noise_samples(i)),1:nEvalPoints)
+    return BootstrapSummary(sampleMean, median(finiteSamples), std(finiteSamples), lower95, upper95)
+end
 
-    #NOTE: Perhaps rethink this in the future
-    if bootstrapSettings.biasCorrection
-        corrBias = corrMean - modelEstimate.correlationEstimate
-        drift_bias = j -> driftMean[j] - modelEstimate.driftEstimate[j]
-        noise_bias = j -> noiseMean[j] - modelEstimate.noiseEstimate[j]
-        
-        corrSamples = corrSamples .- corrBias
-        get_drift_samples = j->broadcast(x->x.driftEstimate[j] - drift_bias(j), bootstrapEstimates)
-        get_noise_samples = j->broadcast(x->x.noiseEstimate[j] - noise_bias(j), bootstrapEstimates)
-    end
-
-    # Percentiles
-    setPrc = [0.025,0.975]
-    corrPrc = quantile(corrSamples,setPrc)
-    errorPrc = quantile(errorSamples,setPrc)
-    driftPrc = broadcast(i->quantile(get_drift_samples(i),setPrc),1:nEvalPoints)
-    noisePrc = broadcast(i->quantile(get_noise_samples(i),setPrc),1:nEvalPoints)
-
-    return BootstrapStatistics(
-        generate_statistics_dict(corrMean,corrMedian,corrStd,corrPrc),
-        generate_statistics_dict(driftMean,driftMedian,driftStd,driftPrc),
-        generate_statistics_dict(noiseMean,noiseMedian,noiseStd,noisePrc),
-        generate_statistics_dict(errorMean,errorMedian,errorStd,errorPrc),
-        bootstrapSettings
+# Summary at each evaluation point, from samples with one row per point
+function summarize(samples::AbstractMatrix, original::AbstractVector, biasCorrection::Bool)
+    pointSummaries = [summarize(samples[j,:], original[j], biasCorrection) for j in axes(samples, 1)]
+    return BootstrapSummary(
+        [s.mean for s in pointSummaries],
+        [s.median for s in pointSummaries],
+        [s.std for s in pointSummaries],
+        [s.lower95 for s in pointSummaries],
+        [s.upper95 for s in pointSummaries]
     )
 end

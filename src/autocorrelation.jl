@@ -16,9 +16,10 @@ function myAutocorr(X,lags)
     Xdemean = X .- mean(X)
     nPower = Int64(log2(nextpow(2,nX))) + 1
     nFFT = 2^nPower
+    # Zero-pad to at least 2nX so the FFT gives the linear, not circular, autocorrelation
     Xpadded = zeros(nFFT)
     Xpadded[1:nX] = Xdemean
-    F = fft(Xdemean)
+    F = fft(Xpadded)
     F = F .* conj(F)
     acf = ifft(F)
     acf = acf[1:(lags+1)]

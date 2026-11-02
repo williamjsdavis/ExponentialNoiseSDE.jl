@@ -1,0 +1,8 @@
+[deps]
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+ExponentialNoiseSDE = "e05663f3-40cf-472d-82cb-b388d7231c78"
+
+[compat]
+DelimitedFiles = "1"
+Documenter = "1"
