@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A benchmark script, `benchmark/scaling.jl`, that times the estimation against the series length and writes the figure in the README (#34).
+
 ## v0.2.0
 
 Review-driven fixes and cleanup. Numbers in parentheses are GitHub issues.
