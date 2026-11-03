@@ -51,13 +51,13 @@ and open `docs/build/index.html`. A worked example, with figures, is in [`exampl
 
 # Benchmarking
 
-This code has been benchmarked and exhibits a competitive scaling compared to [`secn-PR`](https://github.com/williamjsdavis/secn-PR), as shown below. These figures were made with version 0.1.0 (the benchmark script is not in the repository). Since version 0.2.0, computing the conditional moments, the main cost, is 6–8 times faster.
+[`benchmark/scaling.jl`](benchmark/scaling.jl) times the estimation against the length of the series (how to run it is at the top of the script). Almost all of the time goes to computing the conditional moments and the autocorrelation, which grows with the length of the series. Fitting the model to the moments takes about 0.2 ms, whatever the length. At 10⁷ samples the autocorrelation is about half of the time and allocates about 3 GB, so times there vary between runs by about 20%. Version 0.2.0, Julia 1.11, Apple M1, one thread:
 
-<img src="/example/benchmarking_time_comparison.png" height="400"/>
+<img src="benchmark/benchmarking_time.svg" height="400"/>
 
-Individual steps in the method can be benchmarked. The result below shows that the main computational cost comes from calculation of the conditional moments.
+Version 0.1.0 had a scaling comparable to the MATLAB package [`secn-PR`](https://github.com/williamjsdavis/secn-PR), as shown below. The MATLAB timings were measured separately, so the script cannot rerun this comparison.
 
-<img src="/example/benchmarking_time.png" height="400"/>
+<img src="benchmark/benchmarking_time_comparison_v0.1.0.png" height="400"/>
 
 # TODOs
 
