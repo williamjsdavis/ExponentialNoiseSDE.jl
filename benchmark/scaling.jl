@@ -17,8 +17,7 @@ const LENGTHS = [50_000, 100_000, 1_000_000, 10_000_000]
 const DT = 0.005
 momentSettings = ConditionalMomentSettings(
     timeShiftSamplePoints = 1:15,
-    nEvalPoints = 20,
-    evalLims = (-1.0, 1.0),
+    evalPoints = range(-1.0, 1.0, length = 20),
     bandwidth = 0.1,
 )
 fitSettings = ModelEstimateSettings()

@@ -1,9 +1,5 @@
 # Kernel Based Regression of conditional moments
 
-function calculate_xEvalPoints(evalLims::Tuple{Float64,Float64}, nEvalPoints::Int64)
-    return range(evalLims[1], evalLims[2], length = nEvalPoints)
-end
-
 # Sums over pairs (X[t], X[t+τ]) from which the conditional moments and the
 # autocorrelation increments are computed. They add up over any set of pairs,
 # so they can be accumulated in parts.
@@ -17,16 +13,15 @@ end
 
 function MomentSums(momentSettings::ConditionalMomentSettings)
     nτ = length(momentSettings.timeShiftSamplePoints)
-    nx = momentSettings.nEvalPoints
+    nx = length(momentSettings.evalPoints)
     return MomentSums(zeros(nτ,nx), zeros(nτ,nx), zeros(nτ,nx), zeros(nτ), zeros(Int64,nτ))
 end
 
 # Add the pairs (X[t], X[t+τ]) that start at t in starts, for each time shift
 # τ in the settings with t+τ within the series
 function add_pairs!(sums::MomentSums, X, starts, momentSettings::ConditionalMomentSettings)
-    xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints)
     # Passing the kernel as an argument compiles the loop for its concrete type
-    return add_pairs!(sums, X, starts, momentSettings.timeShiftSamplePoints, xEvalPoints,
+    return add_pairs!(sums, X, starts, momentSettings.timeShiftSamplePoints, momentSettings.evalPoints,
         momentSettings.bandwidth, momentSettings.kernel)
 end
 

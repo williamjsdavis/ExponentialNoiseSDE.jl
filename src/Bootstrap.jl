@@ -100,7 +100,7 @@ end
 # per kind.
 function bootstrap_samples(observations, momentSettings, fitSettings, bootstrapSettings, rng)
     nSamples = bootstrapSettings.nSamples
-    nEvalPoints = momentSettings.nEvalPoints
+    nEvalPoints = length(momentSettings.evalPoints)
     correlationEstimate = Vector{Float64}(undef, nSamples)
     driftEstimate = Matrix{Float64}(undef, nEvalPoints, nSamples)
     noiseEstimate = Matrix{Float64}(undef, nEvalPoints, nSamples)

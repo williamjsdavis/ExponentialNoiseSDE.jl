@@ -23,8 +23,7 @@ The data are 50 000 samples of the model simulated with time step
 observation = Observation(X, 0.005)
 momentSettings = ConditionalMomentSettings(
     timeShiftSamplePoints = 1:15,
-    nEvalPoints = 20,
-    evalLims = (-1.0, 1.0),
+    evalPoints = range(-1.0, 1.0, length = 20),
     bandwidth = 0.1,
 )
 modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSettings())

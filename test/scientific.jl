@@ -51,7 +51,7 @@ function scientific_tests()
 
         # The fit uses only what build_moments computed, not the raw data
         observation = Observation(copy(X), DT_SIM)
-        momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), Epanechnikov(), 0.1)
+        momentSettings = ConditionalMomentSettings(collect(1:15), range(-1.0, 1.0, length=20), Epanechnikov(), 0.1)
         conditionalMoments = build_moments(observation, momentSettings)
         fill!(observation.X, NaN)
         refit = estimate_model(conditionalMoments, ModelEstimateSettings())
@@ -65,7 +65,7 @@ function scientific_tests()
         # into one series they give θ 26% low, on average)
         observations = [Observation(simulate_process(StableRNG(1000 + k), linear_drift, constant_noise,
             θ_TRUE, DT_SIM, 1000), DT_SIM) for k in 1:50]
-        momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), Epanechnikov(), 0.1)
+        momentSettings = ConditionalMomentSettings(collect(1:15), range(-1.0, 1.0, length=20), Epanechnikov(), 0.1)
         pooled = estimate_model(observations, momentSettings, ModelEstimateSettings())
         @test isapprox(correlation_time(pooled), θ_TRUE; rtol=0.16)
     end
@@ -115,5 +115,9 @@ function scientific_tests()
             @test matches(reference, time_rescaled(X, DT_SIM, method))
             @test matches(reference, space_rescaled(X, DT_SIM, method))
         end
+        # Uneven evaluation points, at quantiles of the data
+        points = quantile(X, range(0.02, 0.98, length=20))
+        reference = fit_model(X, DT_SIM; evalPoints = points)
+        @test matches(reference, space_rescaled(X, DT_SIM, smoothed; points))
     end
 end
