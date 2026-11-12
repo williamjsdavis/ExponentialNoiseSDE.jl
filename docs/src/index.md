@@ -88,6 +88,12 @@ The resampled estimates are in `bootstrapStatistics.samples`.
 
 ## Options
 
+- **Several series:** pass a vector of observations with the same time step,
+  e.g. `estimate_model([Observation(X1, dt), Observation(X2, dt)], momentSettings, fitSettings)`.
+  The increments within each series are pooled, no increment pairs two series,
+  and the bootstrap draws blocks of windows from all of them. Concatenating the
+  series instead would pair the end of one with the start of the next, and
+  bias ``\theta`` low.
 - **Correlation time:** `ModelEstimateSettings(thetaMethod = FixedTheta(θ))`
   uses a known ``\theta`` instead of estimating it.
 - **Drift and noise solver:** [`SmoothedFiniteDiff`](@ref) (the default) or
@@ -113,8 +119,8 @@ The resampled estimates are in `bootstrapStatistics.samples`.
 - **Kernel bias.** Kernel regression is biased by about ``h^2`` times the
   curvature of the moments and the density gradient, which does not shrink
   with more data. Choose the bandwidth ``h`` with this in mind.
-- **Single series, constant time step.** Observations from several sources or
-  with different time steps are not yet supported.
+- **Constant time step.** Observations with different time steps cannot yet
+  be combined.
 
 ## References
 

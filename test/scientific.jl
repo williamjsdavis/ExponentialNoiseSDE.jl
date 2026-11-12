@@ -60,6 +60,16 @@ function scientific_tests()
         @test noise(refit) == noise(model)
     end
 
+    @testset "Several series" begin
+        # 50 independent series of 1000 samples, pooled, recover θ (concatenated
+        # into one series they give θ 26% low, on average)
+        observations = [Observation(simulate_process(StableRNG(1000 + k), linear_drift, constant_noise,
+            θ_TRUE, DT_SIM, 1000), DT_SIM) for k in 1:50]
+        momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), Epanechnikov(), 0.1)
+        pooled = estimate_model(observations, momentSettings, ModelEstimateSettings())
+        @test isapprox(correlation_time(pooled), θ_TRUE; rtol=0.16)
+    end
+
     @testset "Bootstrap" begin
         # Resamples of windows are centred on the estimate (joining blocks of the
         # series made them 84% low at blockLength = 100 and 48% low at 500), and

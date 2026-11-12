@@ -451,6 +451,31 @@ function test_bootstrap_resampling()
             [sum(counts[t]*(X[t+ν] - X[t])^2 for t in 1:nWindows) for ν in 1:15]
         @test resampled.pairCount == fill(nWindows, 15)
 
+        # With several observations the windows are numbered one observation
+        # after the other, and a block may cover the end of one and the start of
+        # the next, but each pair is a pair within one observation
+        parts = [X[1:1200], X[1201:end]]
+        observations = [Observation(part, 0.0050) for part in parts]
+        nW = [length(part) - 15 for part in parts]
+        # Random blocks, and one that spans both observations
+        windows = [E.block_bootstrap_windows(StableRNG(5), sum(nW), 100); (nW[1] - 49):(nW[1] + 50)]
+        resampled = E.MomentSums(settings)
+        for w in windows
+            E.add_windows!(resampled, observations, w, settings)
+        end
+        partCounts = [zeros(Int, n) for n in nW]
+        for w in windows, g in w
+            g <= nW[1] ? (partCounts[1][g] += 1) : (partCounts[2][g - nW[1]] += 1)
+        end
+        Kp(p, t, j) = Epanechnikov()((x[j] - p[t])/0.1)/0.1
+        pooled(f) = [sum(partCounts[k][t]*f(parts[k], t, ν, j) for k in 1:2 for t in 1:nW[k])
+            for ν in 1:15, j in 1:20]
+        @test resampled.weight ≈ pooled((p, t, ν, j) -> Kp(p, t, j))
+        @test resampled.increment ≈ pooled((p, t, ν, j) -> Kp(p, t, j)*(p[t+ν] - p[t]))
+        @test resampled.unweightedSquaredIncrement ≈
+            [sum(partCounts[k][t]*(parts[k][t+ν] - parts[k][t])^2 for k in 1:2 for t in 1:nW[k]) for ν in 1:15]
+        @test resampled.pairCount == fill(sum(length, windows), 15)
+
         # Warnings from the resample fits are reported once per kind, with a count
         X = readdlm(datafile("exampleData.txt"))[1:1000]
         modelEstimate = estimate_model(Observation(X, 0.0050),
@@ -580,5 +605,50 @@ function test_moments_reference()
             @test isequal(moment1, reference1)
             @test isequal(moment2, reference2)
         end
+    end
+end
+
+# Test estimation from several observations
+function test_multiple_observations()
+    @testset "Several observations" begin
+        X = readdlm(datafile("exampleData.txt"))[1:20000]
+        lags = collect(1:15)
+        settings = ConditionalMomentSettings(lags, 20, (-1.0,1.0), Epanechnikov(), 0.1)
+        x = range(-1.0, 1.0, length=20)
+        single = build_moments(Observation(X, 0.0050), settings)
+
+        # One observation in a vector is the observation
+        inVector = build_moments([Observation(X, 0.0050)], settings)
+        @test isequal(inVector.moment1, single.moment1) && isequal(inVector.moment2, single.moment2)
+        @test inVector.dA == single.dA && inVector.timeShifts == single.timeShifts
+
+        # Parts of a series pool the pairs within each part (the same additions
+        # in the same order as the reference, so identical); no pair spans two parts
+        parts = [X[1:8000], X[8001:end]]
+        split = build_moments([Observation(part, 0.0050) for part in parts], settings)
+        reference1, reference2 = reference_kbr_moments(parts, lags, x, 0.1, Epanechnikov())
+        @test isequal(split.moment1, reference1) && isequal(split.moment2, reference2)
+        @test split.dA ≈ [-sum(sum(abs2, p[1+ν:end] .- p[1:end-ν]) for p in parts)/
+            (2*sum(length(p) - ν for p in parts)) for ν in lags] rtol=1E-12
+        @test length(split.observations) == 2
+
+        # Two copies of a series have the moments of the series
+        twice = build_moments([Observation(X, 0.0050), Observation(X, 0.0050)], settings)
+        @test twice.moment1 ≈ single.moment1 && twice.moment2 ≈ single.moment2 && twice.dA ≈ single.dA
+
+        # Estimates and the bootstrap work on several observations
+        fitSettings = ModelEstimateSettings()
+        @test correlation_time(estimate_model(split, fitSettings)) ==
+            correlation_time(estimate_model([Observation(part, 0.0050) for part in parts], settings, fitSettings))
+        bootstrapStatistics = quietly(() -> estimate_bootstrap_statistics(estimate_model(split, fitSettings),
+            BootstrapSettings(nSamples=3); rng=StableRNG(BOOTSTRAP_SEED)))
+        @test all(isfinite, bootstrapStatistics.samples.correlationEstimate)
+
+        # Invalid combinations
+        @test_throws ArgumentError build_moments(Observation[], settings)
+        @test_throws ArgumentError build_moments([Observation(X, 0.0050), Observation(X, 0.0100)], settings)
+        @test_throws ArgumentError build_moments([Observation(X, 0.0050), Observation(X[1:15], 0.0050)], settings)
+        @test_throws ArgumentError estimate_bootstrap_statistics(estimate_model(split, fitSettings),
+            BootstrapSettings(blockLength=20000 - 2*15))
     end
 end

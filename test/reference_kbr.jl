@@ -1,14 +1,30 @@
 ## Naive reference implementation of the conditional moments
 # The package's implementation before it skipped zero kernel weights and
 # computed each weight once per sample (kept to check it gives the same moments)
+#
+# X is a series, or several series (a vector of vectors) whose pairs within
+# each series are pooled
 function reference_kbr_moments(X, timeShiftSamplePoints, xEvalPoints, bandwidth, kernel)
-    n = length(X)
     nτ = length(timeShiftSamplePoints)
     nx = length(xEvalPoints)
     N = zeros(nτ,nx)
     M1 = zeros(nτ,nx)
     M2 = zeros(nτ,nx)
+    for series in (eltype(X) <: AbstractVector ? X : [X])
+        add_reference_sums!(N, M1, M2, series, timeShiftSamplePoints, xEvalPoints, bandwidth, kernel)
+    end
 
+    #NOTE: No Bessel correction
+    for i in eachindex(N)
+        M2[i] = (M2[i] - (M1[i]*M1[i])/N[i]) / N[i]
+        M1[i] = M1[i] / N[i]
+    end
+
+    return M1, M2
+end
+
+function add_reference_sums!(N, M1, M2, X, timeShiftSamplePoints, xEvalPoints, bandwidth, kernel)
+    n = length(X)
     hinv = inv(bandwidth)
     kernel_scaled(x) = hinv*kernel(hinv*x)
 
@@ -26,12 +42,5 @@ function reference_kbr_moments(X, timeShiftSamplePoints, xEvalPoints, bandwidth,
             end
         end
     end
-
-    #NOTE: No Bessel correction
-    for i in eachindex(N)
-        M2[i] = (M2[i] - (M1[i]*M1[i])/N[i]) / N[i]
-        M1[i] = M1[i] / N[i]
-    end
-
-    return M1, M2
+    return nothing
 end
