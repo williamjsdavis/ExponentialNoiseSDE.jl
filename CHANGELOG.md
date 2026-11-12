@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.3.0
+
+An unbiased bootstrap, several observations, uneven evaluation points, and a less biased correlation time for short series. Numbers in parentheses are GitHub issues.
 
 ### Breaking changes
 
