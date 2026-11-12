@@ -15,6 +15,7 @@
 
 ### Changed
 
+- The default number of bootstrap resamples, `nSamples`, is 100 instead of 20. The 95% intervals are percentiles of the resamples, and with 20 they were too narrow: in simulations they contained the true θ 85% of the time at the default block length, against 93% with 100 resamples (#45).
 - FFTW is no longer a dependency (#36).
 
 ### Performance

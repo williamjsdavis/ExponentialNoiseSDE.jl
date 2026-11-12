@@ -74,15 +74,15 @@ function scientific_tests()
         # Resamples of windows are centred on the estimate (joining blocks of the
         # series made them 84% low at blockLength = 100 and 48% low at 500), and
         # spread about as much as θ̂ does across simulated series, whose robust
-        # spread is 0.00051 at this length
+        # spread is 0.00051 at this length (default number of resamples)
         θMAD = 0.00051
-        for (blockLength, bounds) in ((100, (0.26, 8.8)), (500, (0.22, 6.6)))
+        for (blockLength, centring, bounds) in ((100, 0.024, (0.42, 9.0)), (500, 0.07, (0.40, 9.5)))
             bootstrapStatistics = quietly() do
                 estimate_bootstrap_statistics(model, BootstrapSettings(; blockLength);
                     rng=StableRNG(BOOTSTRAP_SEED))
             end
             θs = bootstrapStatistics.samples.correlationEstimate
-            @test abs(mean(θs)/correlation_time(model) - 1) < 0.1
+            @test abs(mean(θs)/correlation_time(model) - 1) < centring
             @test bounds[1] < mad(θs)/θMAD < bounds[2]
         end
     end

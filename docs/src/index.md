@@ -75,7 +75,7 @@ reproducibility:
 
 ```@example quickstart
 bootstrapStatistics = estimate_bootstrap_statistics(
-    modelEstimate, BootstrapSettings(nSamples = 50); rng = Xoshiro(1))
+    modelEstimate, BootstrapSettings(); rng = Xoshiro(1))
 ```
 
 ```@example quickstart
@@ -107,12 +107,15 @@ The resampled estimates are in `bootstrapStatistics.samples`.
 
 ## Known limitations
 
-- **Bootstrap intervals are somewhat narrow.** Over series simulated from the
-  example model, with the default settings, the resampled ``\theta`` are
-  centred on the estimate but typically spread about 20% less than
-  ``\hat\theta`` does across independent series. The 95% intervals for
-  ``\theta`` cover the true value in about 83% of cases (about 88% with 100
-  resamples). See `test/calibration/calibrate.jl`.
+- **Bootstrap intervals depend on the block length.** The resampled
+  ``\theta`` are centred on the estimate, but the width of the intervals is
+  set by the block length: shorter blocks give wider intervals. Over series
+  simulated from the example model, whose ``X`` stays correlated for about 80
+  samples, the 95% intervals for ``\theta`` contained the true value 93% of
+  the time with the default settings, and 95% with `blockLength = 100`.
+  Choose blocks about as long as the time over which ``X`` stays correlated.
+  A block length chosen from the data, or calibrated intervals, are open
+  questions ([#40](https://github.com/williamjsdavis/ExponentialNoiseSDE.jl/issues/40)).
 - **Evaluation points without data.** Where no sample lies within the kernel
   support of an evaluation point, the moments, drift and noise are NaN (with a
   warning); the other points are unaffected.
