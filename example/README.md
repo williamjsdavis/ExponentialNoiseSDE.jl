@@ -32,15 +32,15 @@ modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSetting
 
 ```
 ModelEstimate
-  correlation time θ: 0.0102476
+  correlation time θ: 0.0102691
   evaluation points:  20 in [-1.0, 1.0]
-  drift range:        (-2.076, 2.144)
-  noise range:        (1.002, 1.224)
+  drift range:        (-2.079, 2.147)
+  noise range:        (1.003, 1.224)
   iteration:          converged in 4 iteration(s)
-  mean fit error:     6.898e-5
+  mean fit error:     6.892e-5
 ```
 
-The estimated correlation time is within 2.5% of the true `θ = 0.01`.
+The estimated correlation time is within 3% of the true `θ = 0.01`.
 `eval_points`, `drift` and `noise` give the estimates at each point:
 
 ![Drift and noise estimates](estimates.svg)

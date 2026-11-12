@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixed
+
+- The autocorrelation increments, to which θ is fitted, came from the sample autocorrelation, which divides the n − ν products at lag ν by n. This biased θ low for short series (−13% at 2 000 samples, −7% at 5 000). They are now minus half the mean squared increment, which is unbiased, and are computed in the same pass as the moments. θ on the example data changes by +0.2% (#36).
+
+### Changed
+
+- FFTW is no longer a dependency (#36).
+
+### Performance
+
+- Without the FFT, the moments of a series of 10⁷ samples take about half the time and allocate kilobytes instead of 2.8 GiB (#36).
+
 ### Added
 
 - A benchmark script, `benchmark/scaling.jl`, that times the estimation against the series length and writes the figure in the README (#34).
