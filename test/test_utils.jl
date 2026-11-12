@@ -13,13 +13,19 @@ function test_utility_statistics()
         @test ExponentialNoiseSDE.true_runs([false,true,true,true,false,false]) == [2:4]
         @test ExponentialNoiseSDE.true_runs([false,false]) == UnitRange{Int}[]
     end
-    @testset "Autocorrelation" begin
-        # Linear (not circular) autocorrelation, by direct summation
+    @testset "Autocorrelation increments" begin
+        # Minus half the mean squared increment at each time shift, over all pairs
         X = randn(StableRNG(2), 50)
-        Xdemean = X .- sum(X)/length(X)
-        lags = 10
-        acfDirect = [sum(Xdemean[1:end-k] .* Xdemean[1+k:end]) for k in 0:lags] ./ sum(abs2, Xdemean)
-        @test ExponentialNoiseSDE.myAutocorr(X, lags) ≈ acfDirect rtol=1E-12
+        lags = [1, 3, 7, 20]
+        settings = ConditionalMomentSettings(lags, 5, (-1.0,1.0), Epanechnikov(), 0.5)
+        dA = build_moments(Observation(X, 1.0), settings).dA
+        @test dA ≈ [-sum(abs2, X[1+ν:end] .- X[1:end-ν])/(2*(length(X) - ν)) for ν in lags] rtol=1E-12
+
+        # The sums add up over parts of the pairs, in any order
+        E = ExponentialNoiseSDE
+        whole = E.add_pairs!(E.MomentSums(settings), X, 1:49, settings)
+        parts = E.add_pairs!(E.add_pairs!(E.MomentSums(settings), X, 30:49, settings), X, 1:29, settings)
+        @test all(getfield(parts, f) ≈ getfield(whole, f) for f in fieldnames(E.MomentSums))
     end
 end
 
@@ -291,8 +297,8 @@ function estimate_large_model()
         0.0050
     )
     
-    # Conditional moments
-    conditionalMoments = build_moments(obs, momentSettings)
+    # Conditional moments, with MATLAB's autocorrelation increments
+    conditionalMoments = with_matlab_dA(build_moments(obs, momentSettings))
     
     ## Model estimates
     modelEstimate = estimate_model(conditionalMoments, modelSettings)
@@ -316,8 +322,8 @@ function estimate_large_model_unsmoothed()
         0.0050
     )
 
-    # Do full estimate
-    modelEstimate = estimate_model(obs, momentSettings, fitSettings)
+    # Do full estimate, with MATLAB's autocorrelation increments
+    modelEstimate = estimate_model(with_matlab_dA(build_moments(obs, momentSettings)), fitSettings)
     return modelEstimate
 end
 
@@ -534,7 +540,9 @@ function test_moments_reference()
         for lags in (collect(1:15), [1,3,7,20]), lims in ((-1.0,1.0), (-3.0,3.0)),
                 bandwidth in (0.01, 0.1), kernel in (Epanechnikov(), BoxKernel())
             x = range(lims[1], lims[2], length=20)
-            moment1, moment2 = ExponentialNoiseSDE.kbr_moments(X, lags, x, bandwidth, kernel)
+            settings = ConditionalMomentSettings(lags, 20, lims, kernel, bandwidth)
+            conditionalMoments = quietly(() -> build_moments(Observation(X, 0.0050), settings))
+            moment1, moment2 = conditionalMoments.moment1, conditionalMoments.moment2
             reference1, reference2 = reference_kbr_moments(X, lags, x, bandwidth, kernel)
             # Same additions in the same order, so identical (NaN where no data)
             @test isequal(moment1, reference1)

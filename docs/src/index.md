@@ -29,7 +29,10 @@ Following Lehle & Peinke (2018):
 1. [`build_moments`](@ref) estimates the conditional mean and variance of the
    increments ``\Delta X = X(t+\tau) - X(t)`` given ``X(t) = x``, by kernel
    regression at a grid of evaluation points ``x`` and time shifts ``\tau``. It
-   also computes the autocorrelation increments of ``X`` at those shifts.
+   also computes the autocorrelation increments ``A(\tau) - A(0)`` at those
+   shifts, where ``A`` is the autocovariance of ``X``, as minus half the mean
+   squared increment (for a stationary process
+   ``A(\tau) - A(0) = -\tfrac{1}{2} E[\Delta X^2]``).
 2. [`estimate_model`](@ref) fits ``\theta`` to the autocorrelation increments,
    expands the moments in basis functions ``r_k(\tau, \theta)`` by least
    squares, and solves for ``f`` and ``g`` by fixed-point iteration.

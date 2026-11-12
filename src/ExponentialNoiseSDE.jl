@@ -17,9 +17,9 @@ Uncertainties come from a block bootstrap ([`estimate_bootstrap_statistics`](@re
 """
 module ExponentialNoiseSDE
 
-using FFTW: fft, ifft
+using LinearAlgebra: LinearAlgebra # Methods of \ for the least-squares fits
 using NLopt: Opt, optimize
-using Statistics: mean, var, std, median, quantile
+using Statistics: mean, std, median, quantile
 using Random: rand, AbstractRNG, default_rng
 using Logging: Logging, AbstractLogger, current_logger, with_logger
 
@@ -44,10 +44,8 @@ include("utils.jl")
 include("Observation.jl")
 
 include("kernels.jl")
-include("KBR.jl")
 include("ConditionalMoments.jl")
-
-include("autocorrelation.jl")
+include("KBR.jl")
 
 include("function_estimation.jl")
 include("theta_estimation.jl")

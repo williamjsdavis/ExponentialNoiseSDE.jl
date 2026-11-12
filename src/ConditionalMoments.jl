@@ -61,7 +61,9 @@ Kernel-regression estimates of the conditional moments of the increments
 - `moment2[i,j]`: conditional *variance* Var[ΔX | X(t) = x_j]
 - `xEvalPoints`: the evaluation points x_j
 - `timeShifts`: the time shifts τ_i, in units of time
-- `dA`: autocorrelation increments at the time shifts, used to fit θ
+- `dA`: autocorrelation increments A(τ_i) - A(0) at the time shifts, where A
+  is the autocovariance of X, used to fit θ. They are estimated as minus half
+  the mean squared increment, since A(τ) - A(0) = -E[ΔX²]/2.
 
 Moments are NaN at evaluation points with no data within the kernel support.
 """
@@ -71,7 +73,7 @@ struct ConditionalMoments
     moment2::Array{Float64,2}
     xEvalPoints::Array{Float64,1}
     timeShifts::Array{Float64,1} # Lags in units of time, one per moment row
-    dA::Array{Float64,1} # Autocorrelation increments at the time shifts
+    dA::Array{Float64,1} # Autocorrelation increments, one per time shift
     observation::Observation
     momentSettings::ConditionalMomentSettings
 end
@@ -95,32 +97,26 @@ function build_moments(observation::Observation, momentSettings::ConditionalMome
     length(observation) > maximumLag || throw(ArgumentError(
         "the series has $(length(observation)) samples, too few for a time shift of $maximumLag"))
 
-    xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints)
+    # All pairs in the series
+    sums = add_pairs!(MomentSums(momentSettings), observation.X, 1:length(observation)-1, momentSettings)
+    return conditional_moments(sums, observation, momentSettings)
+end
 
-    moment1, moment2 = kbr_moments(
-        observation.X,
-        momentSettings.timeShiftSamplePoints,
-        xEvalPoints,
-        momentSettings.bandwidth,
-        momentSettings.kernel
-    )
+# Conditional moments from sums over pairs of the observation
+function conditional_moments(sums, observation::Observation, momentSettings::ConditionalMomentSettings)
+    xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints) |> collect
+    moment1, moment2, dA = moments(sums)
     noData = [all(isnan, view(moment1, :, j)) for j in eachindex(xEvalPoints)]
     if any(noData)
         @warn "No data within the kernel support of $(count(noData)) evaluation point(s); " *
             "moments, drift and noise are NaN there" xEvalPoints = xEvalPoints[noData]
     end
 
-    # Autocorrelation increments at the same time shifts, for fitting the
-    # correlation time
-    lags = momentSettings.timeShiftSamplePoints
-    timeShifts = lags .* observation.dt
-    dA = autocorr_increment(observation.X, maximum(lags))[lags]
-
-    xEvalPointsCollect = xEvalPoints |> collect
+    timeShifts = momentSettings.timeShiftSamplePoints .* observation.dt
     return ConditionalMoments(
         moment1,
         moment2,
-        xEvalPointsCollect,
+        xEvalPoints,
         timeShifts,
         dA,
         observation,

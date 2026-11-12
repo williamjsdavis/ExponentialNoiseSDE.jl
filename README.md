@@ -51,7 +51,7 @@ and open `docs/build/index.html`. A worked example, with figures, is in [`exampl
 
 # Benchmarking
 
-[`benchmark/scaling.jl`](benchmark/scaling.jl) times the estimation against the length of the series (how to run it is at the top of the script). Almost all of the time goes to computing the conditional moments and the autocorrelation, which grows with the length of the series. Fitting the model to the moments takes about 0.2 ms, whatever the length. At 10⁷ samples the autocorrelation is about half of the time and allocates about 3 GB, so times there vary between runs by about 20%. Version 0.2.0, Julia 1.11, Apple M1, one thread:
+[`benchmark/scaling.jl`](benchmark/scaling.jl) times the estimation against the length of the series (how to run it is at the top of the script). Almost all of the time goes to computing the conditional moments and autocorrelation increments, in one pass over the series, so it grows linearly with the length of the series. Fitting the model to the moments takes about 0.2 ms, whatever the length. Julia 1.11, Apple M1, one thread:
 
 <img src="benchmark/benchmarking_time.svg" height="400"/>
 
