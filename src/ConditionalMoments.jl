@@ -3,36 +3,36 @@
 # MATLAB equivalent: MomentOptionsClass.m
 #TODO: Add optimal bandwidth selection
 """
-    ConditionalMomentSettings(; timeShiftSamplePoints, nEvalPoints, evalLims, bandwidth, kernel=Epanechnikov())
-    ConditionalMomentSettings(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
+    ConditionalMomentSettings(; timeShiftSamplePoints, evalPoints, bandwidth, kernel=Epanechnikov())
+    ConditionalMomentSettings(timeShiftSamplePoints, evalPoints, kernel, bandwidth)
 
 Settings for estimating conditional moments of the increments `X(t+τ) - X(t)`.
 
 - `timeShiftSamplePoints`: lags τ/dt in samples; at least 4, positive and
   strictly increasing (e.g. `1:15`)
-- `nEvalPoints`: number of evaluation points x (at least 3), evenly spaced over
-- `evalLims`: `(xmin, xmax)`, with `xmin < xmax`
+- `evalPoints`: evaluation points x; at least 3, finite and strictly
+  increasing, e.g. evenly spaced, `range(-1, 1, length = 20)`, or at
+  quantiles of the data
 - `bandwidth`: kernel bandwidth h, in units of x
 - `kernel`: a `Kernel`, scaled by the bandwidth
 """
 Base.@kwdef struct ConditionalMomentSettings
     timeShiftSamplePoints::Array{Int64,1}
-    nEvalPoints::Int64
-    evalLims::Tuple{Float64,Float64}
+    evalPoints::Array{Float64,1}
     kernel::Kernel = Epanechnikov()
     bandwidth::Float64
-    function ConditionalMomentSettings(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
+    function ConditionalMomentSettings(timeShiftSamplePoints, evalPoints, kernel, bandwidth)
         check_time_shifts(timeShiftSamplePoints)
         # Finite differences in the drift and noise solution need 3 points
-        nEvalPoints >= 3 || throw(ArgumentError(
-            "at least 3 evaluation points are needed, got $nEvalPoints"))
-        (all(isfinite, evalLims) && evalLims[1] < evalLims[2]) || throw(ArgumentError(
-            "evalLims must be finite and increasing, got $evalLims"))
+        length(evalPoints) >= 3 || throw(ArgumentError(
+            "at least 3 evaluation points are needed, got $(length(evalPoints))"))
+        (all(isfinite, evalPoints) && all(>(0), diff(evalPoints))) || throw(ArgumentError(
+            "evaluation points must be finite and strictly increasing, got $(evalPoints)"))
         kernel isa Kernel || throw(ArgumentError(
             "kernel must be a Kernel instance such as Epanechnikov(), got $(repr(kernel))"))
         (bandwidth > 0 && isfinite(bandwidth)) || throw(ArgumentError(
             "bandwidth must be positive and finite, got $bandwidth"))
-        return new(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
+        return new(timeShiftSamplePoints, evalPoints, kernel, bandwidth)
     end
 end
 
@@ -61,7 +61,10 @@ Kernel-regression estimates of the conditional moments of the increments
 - `moment2[i,j]`: conditional *variance* Var[ΔX | X(t) = x_j]
 - `xEvalPoints`: the evaluation points x_j
 - `timeShifts`: the time shifts τ_i, in units of time
-- `dA`: autocorrelation increments at the time shifts, used to fit θ
+- `dA`: autocorrelation increments A(τ_i) - A(0) at the time shifts, where A
+  is the autocovariance of X, used to fit θ. They are estimated as minus half
+  the mean squared increment, since A(τ) - A(0) = -E[ΔX²]/2.
+- `observations`: the observations the moments were estimated from
 
 Moments are NaN at evaluation points with no data within the kernel support.
 """
@@ -71,8 +74,8 @@ struct ConditionalMoments
     moment2::Array{Float64,2}
     xEvalPoints::Array{Float64,1}
     timeShifts::Array{Float64,1} # Lags in units of time, one per moment row
-    dA::Array{Float64,1} # Autocorrelation increments at the time shifts
-    observation::Observation
+    dA::Array{Float64,1} # Autocorrelation increments, one per time shift
+    observations::Vector{Observation}
     momentSettings::ConditionalMomentSettings
 end
 
@@ -84,46 +87,62 @@ Base.show(io::IO, conditionalMoments::ConditionalMoments) = print(io,
 # MATLAB equivalent: buildMoments.m
 """
     build_moments(observation::Observation, momentSettings::ConditionalMomentSettings) -> ConditionalMoments
+    build_moments(observations::AbstractVector{Observation}, momentSettings) -> ConditionalMoments
 
 Estimate the conditional moments of the increments of `observation`, and its
 autocorrelation increments, at the lags and evaluation points in
 `momentSettings`. Warns if some evaluation points have no data within the
 kernel support.
+
+Several observations of the same process, with the same time step, are
+combined by pooling the increments within each of them; no increment pairs
+two observations. Each must be longer than the largest time shift.
 """
-function build_moments(observation::Observation, momentSettings::ConditionalMomentSettings)
+build_moments(observation::Observation, momentSettings::ConditionalMomentSettings) =
+    build_moments([observation], momentSettings)
+
+function build_moments(observations::AbstractVector{Observation}, momentSettings::ConditionalMomentSettings)
+    check_observations(observations, momentSettings)
+
+    # All pairs within each observation
+    sums = MomentSums(momentSettings)
+    for observation in observations
+        add_pairs!(sums, observation.X, 1:length(observation)-1, momentSettings)
+    end
+    return conditional_moments(sums, observations, momentSettings)
+end
+
+function check_observations(observations, momentSettings)
+    isempty(observations) && throw(ArgumentError("at least one observation is needed"))
+    dt = first(observations).dt
+    all(observation -> observation.dt ≈ dt, observations) || throw(ArgumentError(
+        "observations must have the same time step, got $(unique(observation.dt for observation in observations))"))
     maximumLag = maximum(momentSettings.timeShiftSamplePoints)
-    length(observation) > maximumLag || throw(ArgumentError(
-        "the series has $(length(observation)) samples, too few for a time shift of $maximumLag"))
+    for observation in observations
+        length(observation) > maximumLag || throw(ArgumentError(
+            "a series has $(length(observation)) samples, too few for a time shift of $maximumLag"))
+    end
+    return nothing
+end
 
-    xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints)
-
-    moment1, moment2 = kbr_moments(
-        observation.X,
-        momentSettings.timeShiftSamplePoints,
-        xEvalPoints,
-        momentSettings.bandwidth,
-        momentSettings.kernel
-    )
+# Conditional moments from sums over pairs of the observations
+function conditional_moments(sums, observations, momentSettings::ConditionalMomentSettings)
+    xEvalPoints = copy(momentSettings.evalPoints)
+    moment1, moment2, dA = moments(sums)
     noData = [all(isnan, view(moment1, :, j)) for j in eachindex(xEvalPoints)]
     if any(noData)
         @warn "No data within the kernel support of $(count(noData)) evaluation point(s); " *
             "moments, drift and noise are NaN there" xEvalPoints = xEvalPoints[noData]
     end
 
-    # Autocorrelation increments at the same time shifts, for fitting the
-    # correlation time
-    lags = momentSettings.timeShiftSamplePoints
-    timeShifts = lags .* observation.dt
-    dA = autocorr_increment(observation.X, maximum(lags))[lags]
-
-    xEvalPointsCollect = xEvalPoints |> collect
+    timeShifts = momentSettings.timeShiftSamplePoints .* first(observations).dt
     return ConditionalMoments(
         moment1,
         moment2,
-        xEvalPointsCollect,
+        xEvalPoints,
         timeShifts,
         dA,
-        observation,
+        collect(observations),
         momentSettings
     )
 end

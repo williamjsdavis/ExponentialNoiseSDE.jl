@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.3.0
+
+An unbiased bootstrap, several observations, uneven evaluation points, and a less biased correlation time for short series. Numbers in parentheses are GitHub issues.
+
+### Breaking changes
+
+- `ConditionalMomentSettings` takes the evaluation points, `evalPoints`, instead of `nEvalPoints` and `evalLims`; any strictly increasing points can be used. For the previous evenly spaced grid, replace `nEvalPoints = 20, evalLims = (-1.0, 1.0)` with `evalPoints = range(-1.0, 1.0, length = 20)` (#43).
+- `ConditionalMoments.observation` is now `observations`, a vector (#41).
+- `BootstrapSettings.blockLength` counts windows of the series rather than samples (#38).
+
+### Fixed
+
+- The autocorrelation increments, to which θ is fitted, came from the sample autocorrelation, which divides the n − ν products at lag ν by n. This biased θ low for short series (−13% at 2 000 samples, −7% at 5 000). They are now minus half the mean squared increment, which is unbiased, and are computed in the same pass as the moments. θ on the example data changes by +0.2% (#36).
+- The bootstrap joined blocks of the series end to end, so increments across the joins paired unrelated points. They acted like extra white noise: the resampled θ was 48% low at the default `blockLength = 500` (84% at 100), and the drift and noise summaries were biased too. Resamples are now made of blocks of the windows the estimate uses (Künsch, 1989), so every increment in a resample is an increment of the series. `blockLength` now counts windows, and must be less than the number of windows, the series length less the largest time shift (#38).
+
+### Changed
+
+- The default number of bootstrap resamples, `nSamples`, is 100 instead of 20. The 95% intervals are percentiles of the resamples, and with 20 they were too narrow: in simulations they contained the true θ 85% of the time at the default block length, against 93% with 100 resamples (#45).
+- FFTW is no longer a dependency (#36).
+
+### Performance
+
+- Without the FFT, the moments of a series of 10⁷ samples take about half the time and allocate kilobytes instead of 2.8 GiB (#36).
+
+### Added
+
+- Uneven evaluation points, e.g. at quantiles of the data (#43).
+- Several observations of the same process, with the same time step, can be combined: `build_moments` and `estimate_model` accept a vector of `Observation`s, pool the increments within each, and the bootstrap draws from the windows of all of them. Concatenating series instead biased θ low (−26% for 50 series of 1 000 samples) (#41).
+- A benchmark script, `benchmark/scaling.jl`, that times the estimation against the series length and writes the figure in the README (#34).
+
 ## v0.2.0
 
 Review-driven fixes and cleanup. Numbers in parentheses are GitHub issues.

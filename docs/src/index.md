@@ -29,12 +29,18 @@ Following Lehle & Peinke (2018):
 1. [`build_moments`](@ref) estimates the conditional mean and variance of the
    increments ``\Delta X = X(t+\tau) - X(t)`` given ``X(t) = x``, by kernel
    regression at a grid of evaluation points ``x`` and time shifts ``\tau``. It
-   also computes the autocorrelation increments of ``X`` at those shifts.
+   also computes the autocorrelation increments ``A(\tau) - A(0)`` at those
+   shifts, where ``A`` is the autocovariance of ``X``, as minus half the mean
+   squared increment (for a stationary process
+   ``A(\tau) - A(0) = -\tfrac{1}{2} E[\Delta X^2]``).
 2. [`estimate_model`](@ref) fits ``\theta`` to the autocorrelation increments,
    expands the moments in basis functions ``r_k(\tau, \theta)`` by least
    squares, and solves for ``f`` and ``g`` by fixed-point iteration.
 3. [`estimate_bootstrap_statistics`](@ref) repeats the estimate on circular
-   block bootstrap resamples of the series.
+   block bootstrap resamples. The estimate uses the series only through its
+   windows ``(X(t), \ldots, X(t + \tau_\mathrm{max}))``, so a resample is made
+   of blocks of consecutive windows (Künsch, 1989): every increment in a
+   resample is an increment of the series.
 
 ## Quick start
 
@@ -50,8 +56,7 @@ observation = Observation(X, 0.005)
 
 momentSettings = ConditionalMomentSettings(
     timeShiftSamplePoints = 1:15,
-    nEvalPoints = 20,
-    evalLims = (-1.0, 1.0),
+    evalPoints = range(-1.0, 1.0, length = 20),
     bandwidth = 0.1,
 )
 modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSettings())
@@ -70,7 +75,7 @@ reproducibility:
 
 ```@example quickstart
 bootstrapStatistics = estimate_bootstrap_statistics(
-    modelEstimate, BootstrapSettings(nSamples = 50); rng = Xoshiro(1))
+    modelEstimate, BootstrapSettings(); rng = Xoshiro(1))
 ```
 
 ```@example quickstart
@@ -82,6 +87,16 @@ The resampled estimates are in `bootstrapStatistics.samples`.
 
 ## Options
 
+- **Evaluation points:** any strictly increasing points, e.g. evenly spaced,
+  `evalPoints = range(-1.0, 1.0, length = 20)`, or at quantiles of the data,
+  `evalPoints = quantile(X, range(0.02, 0.98, length = 20))`, which puts
+  every point where there are data.
+- **Several series:** pass a vector of observations with the same time step,
+  e.g. `estimate_model([Observation(X1, dt), Observation(X2, dt)], momentSettings, fitSettings)`.
+  The increments within each series are pooled, no increment pairs two series,
+  and the bootstrap draws blocks of windows from all of them. Concatenating the
+  series instead would pair the end of one with the start of the next, and
+  bias ``\theta`` low.
 - **Correlation time:** `ModelEstimateSettings(thetaMethod = FixedTheta(θ))`
   uses a known ``\theta`` instead of estimating it.
 - **Drift and noise solver:** [`SmoothedFiniteDiff`](@ref) (the default) or
@@ -92,14 +107,15 @@ The resampled estimates are in `bootstrapStatistics.samples`.
 
 ## Known limitations
 
-- **Bootstrap block joins.** Resamples join blocks of the series end to end,
-  so increments that span a join are not increments of the original process.
-  They act like extra white noise and bias the resampled estimates. The
-  resampled ``\theta`` is lower than the estimate from the full series,
-  increasingly so for short blocks (about −50% at `blockLength = 500` on the
-  example data). With `biasCorrection = true` the 95% intervals are shifted to
-  centre on the original estimate, but their width and the reported means and
-  medians still include this effect.
+- **Bootstrap intervals depend on the block length.** The resampled
+  ``\theta`` are centred on the estimate, but the width of the intervals is
+  set by the block length: shorter blocks give wider intervals. Over series
+  simulated from the example model, whose ``X`` stays correlated for about 80
+  samples, the 95% intervals for ``\theta`` contained the true value 93% of
+  the time with the default settings, and 95% with `blockLength = 100`.
+  Choose blocks about as long as the time over which ``X`` stays correlated.
+  A block length chosen from the data, or calibrated intervals, are open
+  questions ([#40](https://github.com/williamjsdavis/ExponentialNoiseSDE.jl/issues/40)).
 - **Evaluation points without data.** Where no sample lies within the kernel
   support of an evaluation point, the moments, drift and noise are NaN (with a
   warning); the other points are unaffected.
@@ -109,8 +125,8 @@ The resampled estimates are in `bootstrapStatistics.samples`.
 - **Kernel bias.** Kernel regression is biased by about ``h^2`` times the
   curvature of the moments and the density gradient, which does not shrink
   with more data. Choose the bandwidth ``h`` with this in mind.
-- **Single series, constant time step.** Observations from several sources or
-  with different time steps are not yet supported.
+- **Constant time step.** Observations with different time steps cannot yet
+  be combined.
 
 ## References
 

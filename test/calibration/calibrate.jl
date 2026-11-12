@@ -7,7 +7,7 @@
 #   julia -e 'using Pkg; Pkg.activate(temp=true); Pkg.develop(path="."); Pkg.add("StableRNGs");
 #             include("test/calibration/calibrate.jl")'
 # Set NSEEDS to change the number of seeds (default 100).
-using ExponentialNoiseSDE, StableRNGs, Statistics
+using ExponentialNoiseSDE, StableRNGs, Statistics, Logging
 include(joinpath(@__DIR__, "..", "simulate.jl"))
 include(joinpath(@__DIR__, "..", "helpers.jl"))
 
@@ -18,6 +18,7 @@ const nSeeds = parse(Int, get(ENV, "NSEEDS", "100"))
 
 f, g = example_drift, example_noise
 θErr = Float64[]; fErr = Float64[]; gErr = Float64[]
+models = ModelEstimate[] # Seed order, for the bootstrap checks
 nDiverged = 0
 for seed in 1:nSeeds
     X = try
@@ -28,6 +29,7 @@ for seed in 1:nSeeds
         continue
     end
     m = fit_model(X, DT)
+    push!(models, m)
     x = eval_points(m); inner = abs.(x) .<= 0.6
     push!(θErr, abs(correlation_time(m) - θTRUE)/θTRUE)
     push!(fErr, maximum(abs, drift(m)[inner] .- f.(x[inner])))
@@ -68,3 +70,39 @@ println("Linear process Var X relative error (N=200000): median $(round(median(v
 spread(n, seeds) = std([correlation_time(fit_model(simulate_process(StableRNG(s), fLin, gLin, θTRUE, DT, n), DT)) for s in seeds])
 ratios = [spread(160_000, (8k+1):(8k+8)) / spread(10_000, (8k+1):(8k+8)) for k in 0:9]
 println("Spread ratio std(θ̂ | 16N)/std(θ̂ | N), 10 groups of 8 seeds: ", round.(ratios, digits=3), "  (expect ≈ 0.25)")
+
+# Several short series: 50 independent series of 1000 samples, pooled. Series k
+# of repetition s uses seed 1000s + k.
+pooledErr = Float64[]
+for s in 1:nSeeds
+    observations = [Observation(simulate_process(StableRNG(1000s + k), fLin, gLin, θTRUE, DT, 1000), DT) for k in 1:50]
+    momentSettings = ConditionalMomentSettings(collect(1:15), range(-1.0, 1.0, length=20), Epanechnikov(), 0.1)
+    m = estimate_model(observations, momentSettings, ModelEstimateSettings())
+    push!(pooledErr, abs(correlation_time(m) - θTRUE)/θTRUE)
+end
+println("50 series of 1000 samples, pooled: θ relative error median $(round(median(pooledErr), sigdigits=3)), 99% $(round(q(pooledErr), sigdigits=3)) -> rtol $(round(1.5q(pooledErr), sigdigits=2)); seed 1: $(round(pooledErr[1], sigdigits=3))")
+
+# Bootstrap with the default number of resamples, on the recovery datasets:
+# centring of the resampled θ on the estimate, their spread relative to the
+# spread of θ̂ across datasets (robust: θ̂ has rare large outliers), and how
+# often the 95% interval covers the true θ. The tests use dataset 1 with
+# StableRNG(1), as here. mad is in helpers.jl.
+θMAD = mad(correlation_time.(models))
+println("Spread of θ̂ across datasets: MAD $(round(θMAD, sigdigits=3)), std $(round(std(correlation_time.(models)), sigdigits=3))")
+for blockLength in (100, 500)
+    centring = Float64[]; madRatio = Float64[]; covered = 0
+    for (k, m) in enumerate(models)
+        b = with_logger(ConsoleLogger(stderr, Logging.Error)) do
+            estimate_bootstrap_statistics(m, BootstrapSettings(; blockLength); rng = StableRNG(k))
+        end
+        θs = b.samples.correlationEstimate
+        push!(centring, mean(θs)/correlation_time(m) - 1)
+        push!(madRatio, mad(θs)/θMAD)
+        covered += b.correlationEstimate.lower95 <= θTRUE <= b.correlationEstimate.upper95
+    end
+    lo, hi = quantile(madRatio, 0.005), quantile(madRatio, 0.995)
+    println("Bootstrap, blockLength $blockLength, $(length(models)) datasets:")
+    println("  centring |mean θ*/θ̂ - 1|: median $(round(median(abs.(centring)), sigdigits=3)), 99% $(round(q(abs.(centring)), sigdigits=3)) -> tol $(round(1.5q(abs.(centring)), sigdigits=2)); dataset 1: $(round(centring[1], sigdigits=3))")
+    println("  spread MAD(θ*)/MAD(θ̂): median $(round(median(madRatio), sigdigits=3)), 0.5–99.5% $(round(lo, sigdigits=3))–$(round(hi, sigdigits=3)) -> bounds $(round(lo/1.5, sigdigits=2))–$(round(1.5hi, sigdigits=2)); dataset 1: $(round(madRatio[1], sigdigits=3))")
+    println("  95% interval covers the true θ: $(round(covered/length(models), digits=2))")
+end

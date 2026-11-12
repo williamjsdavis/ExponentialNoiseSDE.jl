@@ -12,15 +12,30 @@ function validate_basic(modelEstimate)
     end
 end
 
-# Test theta properties
-function validate_theta(modelEstimate)
-    # Sample autocorrelation
+# MATLAB estimates the autocorrelation increments from the sample
+# autocorrelation, and the package from squared increments (#36); the two
+# differ by O(lag/N). The other comparisons use MATLAB's autocorrelation
+# increments as input (with_matlab_dA), so that they stay exact.
+function validate_autocorrelation_increments()
+    momentSettings, _ = get_default_estimation_settings()
+    observation = Observation(readdlm(datafile("exampleData.txt"))[:], 0.0050)
+    dA = build_moments(observation, momentSettings).dA
     dAMATLAB = DelimitedFiles.readdlm(datafile("dAMATLAB.txt"))[:]
 
-    # Tolerances below are 20-600x the agreement achieved (dA 1.7e-16, lambdaStar
-    # 5.9e-6 rel., rMatrix 2.5e-10, theta 2.6e-10)
-    dATol = 1E-13
-    dAError = abs.(modelEstimate.thetaProperties.dA .- dAMATLAB)
+    # Agreement achieved: 1.6e-3 relative at lag 1, the largest
+    @testset "MATLAB validation: autocorrelation increments" begin
+        @test all(abs.(dA ./ dAMATLAB .- 1) .< 5E-3)
+    end
+end
+
+with_matlab_dA(cm) = ExponentialNoiseSDE.ConditionalMoments(cm.moment1, cm.moment2,
+    cm.xEvalPoints, cm.timeShifts, DelimitedFiles.readdlm(datafile("dAMATLAB.txt"))[:],
+    cm.observations, cm.momentSettings)
+
+# Test theta properties
+function validate_theta(modelEstimate)
+    # Tolerances below are 20-600x the agreement achieved (lambdaStar 5.9e-6
+    # rel., rMatrix 2.5e-10, theta 2.6e-10)
 
     # Lambda star
     lambdaStarMATLAB = DelimitedFiles.readdlm(datafile("lambdaStarMATLAB.txt"))[:]
@@ -45,7 +60,6 @@ function validate_theta(modelEstimate)
     correlationEstimteError = abs(modelEstimate.correlationEstimate - correlationEstimteMATLAB)
 
     @testset "MATLAB validation: theta properties" begin
-        @test all(dAError .< dATol)
         @test all(lambdaStarRError .< lambdaStarRTol)
         @test newNuMaxMATLAB == modelEstimate.thetaProperties.nuMax
         @test all(rMatrixError .< rMatrixTol)

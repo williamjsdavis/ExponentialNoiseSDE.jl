@@ -51,13 +51,40 @@ function scientific_tests()
 
         # The fit uses only what build_moments computed, not the raw data
         observation = Observation(copy(X), DT_SIM)
-        momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), Epanechnikov(), 0.1)
+        momentSettings = ConditionalMomentSettings(collect(1:15), range(-1.0, 1.0, length=20), Epanechnikov(), 0.1)
         conditionalMoments = build_moments(observation, momentSettings)
         fill!(observation.X, NaN)
         refit = estimate_model(conditionalMoments, ModelEstimateSettings())
         @test correlation_time(refit) == correlation_time(model)
         @test drift(refit) == drift(model)
         @test noise(refit) == noise(model)
+    end
+
+    @testset "Several series" begin
+        # 50 independent series of 1000 samples, pooled, recover θ (concatenated
+        # into one series they give θ 26% low, on average)
+        observations = [Observation(simulate_process(StableRNG(1000 + k), linear_drift, constant_noise,
+            θ_TRUE, DT_SIM, 1000), DT_SIM) for k in 1:50]
+        momentSettings = ConditionalMomentSettings(collect(1:15), range(-1.0, 1.0, length=20), Epanechnikov(), 0.1)
+        pooled = estimate_model(observations, momentSettings, ModelEstimateSettings())
+        @test isapprox(correlation_time(pooled), θ_TRUE; rtol=0.16)
+    end
+
+    @testset "Bootstrap" begin
+        # Resamples of windows are centred on the estimate (joining blocks of the
+        # series made them 84% low at blockLength = 100 and 48% low at 500), and
+        # spread about as much as θ̂ does across simulated series, whose robust
+        # spread is 0.00051 at this length (default number of resamples)
+        θMAD = 0.00051
+        for (blockLength, centring, bounds) in ((100, 0.024, (0.42, 9.0)), (500, 0.07, (0.40, 9.5)))
+            bootstrapStatistics = quietly() do
+                estimate_bootstrap_statistics(model, BootstrapSettings(; blockLength);
+                    rng=StableRNG(BOOTSTRAP_SEED))
+            end
+            θs = bootstrapStatistics.samples.correlationEstimate
+            @test abs(mean(θs)/correlation_time(model) - 1) < centring
+            @test bounds[1] < mad(θs)/θMAD < bounds[2]
+        end
     end
 
     @testset "White noise" begin
@@ -88,5 +115,9 @@ function scientific_tests()
             @test matches(reference, time_rescaled(X, DT_SIM, method))
             @test matches(reference, space_rescaled(X, DT_SIM, method))
         end
+        # Uneven evaluation points, at quantiles of the data
+        points = quantile(X, range(0.02, 0.98, length=20))
+        reference = fit_model(X, DT_SIM; evalPoints = points)
+        @test matches(reference, space_rescaled(X, DT_SIM, smoothed; points))
     end
 end

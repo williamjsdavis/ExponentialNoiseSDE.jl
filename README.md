@@ -27,8 +27,7 @@ using ExponentialNoiseSDE, Random
 observation = Observation(X, dt) # Time series X with time step dt
 momentSettings = ConditionalMomentSettings(
     timeShiftSamplePoints = 1:15,
-    nEvalPoints = 20,
-    evalLims = (-1.0, 1.0),
+    evalPoints = range(-1.0, 1.0, length = 20),
     bandwidth = 0.1,
 )
 modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSettings())
@@ -51,24 +50,24 @@ and open `docs/build/index.html`. A worked example, with figures, is in [`exampl
 
 # Benchmarking
 
-This code has been benchmarked and exhibits a competitive scaling compared to [`secn-PR`](https://github.com/williamjsdavis/secn-PR), as shown below. These figures were made with version 0.1.0 (the benchmark script is not in the repository). Since version 0.2.0, computing the conditional moments, the main cost, is 6–8 times faster.
+[`benchmark/scaling.jl`](benchmark/scaling.jl) times the estimation against the length of the series (how to run it is at the top of the script). Almost all of the time goes to computing the conditional moments and autocorrelation increments, in one pass over the series, so it grows linearly with the length of the series. Fitting the model to the moments takes about 0.2 ms, whatever the length. Julia 1.11, Apple M1, one thread:
 
-<img src="/example/benchmarking_time_comparison.png" height="400"/>
+<img src="benchmark/benchmarking_time.svg" height="400"/>
 
-Individual steps in the method can be benchmarked. The result below shows that the main computational cost comes from calculation of the conditional moments.
+Version 0.1.0 had a scaling comparable to the MATLAB package [`secn-PR`](https://github.com/williamjsdavis/secn-PR), as shown below. The MATLAB timings were measured separately, so the script cannot rerun this comparison.
 
-<img src="/example/benchmarking_time.png" height="400"/>
+<img src="benchmark/benchmarking_time_comparison_v0.1.0.png" height="400"/>
 
 # TODOs
 
-- [ ] Add observations from multiple data sources
+- [x] Add observations from multiple data sources (with the same time step)
 - [x] Implement arbitrary `timeShiftSamplePoints` vector
-- [ ] Implement arbitrary spatial evaluation points
+- [x] Implement arbitrary spatial evaluation points
 - [x] Implement option of forcing a particular correlation time
 - [ ] Add compatibility for combining observations of different time-steps
 - [ ] Make a plotting function for the distribution of correlation times (the bootstrap samples are in `bootstrapStatistics.samples`)
 - [ ] Add more kernel functions to the library
-- [ ] Remove the bias from joining blocks in the bootstrap
+- [x] Remove the bias from joining blocks in the bootstrap
 
 # Changelog
 

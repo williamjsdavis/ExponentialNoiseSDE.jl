@@ -29,6 +29,7 @@ include("scientific.jl")
     test_kernels()
     test_moments_reference()
     test_points_without_data()
+    test_multiple_observations()
     test_function_iteration()
     test_bootstrap_statistics()
     test_bootstrap_resampling()
@@ -40,6 +41,8 @@ include("scientific.jl")
     small_data_test()
 
     ## Validate full data calculations
+    validate_autocorrelation_increments()
+
     # (against MATLAB smoothed finite diff calculations)
     # One pinned iteration, as in MATLAB, so the iteration has not converged
     modelEstimate = @test_logs (:warn, r"did not converge") estimate_large_model()

@@ -23,8 +23,7 @@ The data are 50 000 samples of the model simulated with time step
 observation = Observation(X, 0.005)
 momentSettings = ConditionalMomentSettings(
     timeShiftSamplePoints = 1:15,
-    nEvalPoints = 20,
-    evalLims = (-1.0, 1.0),
+    evalPoints = range(-1.0, 1.0, length = 20),
     bandwidth = 0.1,
 )
 modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSettings())
@@ -32,15 +31,15 @@ modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSetting
 
 ```
 ModelEstimate
-  correlation time θ: 0.0102476
+  correlation time θ: 0.0102691
   evaluation points:  20 in [-1.0, 1.0]
-  drift range:        (-2.076, 2.144)
-  noise range:        (1.002, 1.224)
+  drift range:        (-2.079, 2.147)
+  noise range:        (1.003, 1.224)
   iteration:          converged in 4 iteration(s)
-  mean fit error:     6.898e-5
+  mean fit error:     6.892e-5
 ```
 
-The estimated correlation time is within 2.5% of the true `θ = 0.01`.
+The estimated correlation time is within 3% of the true `θ = 0.01`.
 `eval_points`, `drift` and `noise` give the estimates at each point:
 
 ![Drift and noise estimates](estimates.svg)
@@ -55,5 +54,9 @@ lower, upper = drift(bootstrapStatistics).lower95, drift(bootstrapStatistics).up
 
 ![Drift and noise with 95% intervals](bootstrap.svg)
 
-The bootstrap joins blocks of the series end to end, which biases the
-resampled estimates (see "Known limitations" in the documentation).
+Each resample is made of blocks of consecutive windows of the series, so the
+resampled estimates are centred on the best estimate. Over series simulated
+from this model, 95% intervals for θ contain the true value 93% of the time
+with the default block length of 500, and 95% with blocks of 100, about the
+time over which X stays correlated (see "Known limitations" in the
+documentation).
