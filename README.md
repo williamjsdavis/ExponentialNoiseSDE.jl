@@ -27,8 +27,7 @@ using ExponentialNoiseSDE, Random
 observation = Observation(X, dt) # Time series X with time step dt
 momentSettings = ConditionalMomentSettings(
     timeShiftSamplePoints = 1:15,
-    nEvalPoints = 20,
-    evalLims = (-1.0, 1.0),
+    evalPoints = range(-1.0, 1.0, length = 20),
     bandwidth = 0.1,
 )
 modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSettings())
@@ -63,7 +62,7 @@ Version 0.1.0 had a scaling comparable to the MATLAB package [`secn-PR`](https:/
 
 - [x] Add observations from multiple data sources (with the same time step)
 - [x] Implement arbitrary `timeShiftSamplePoints` vector
-- [ ] Implement arbitrary spatial evaluation points
+- [x] Implement arbitrary spatial evaluation points
 - [x] Implement option of forcing a particular correlation time
 - [ ] Add compatibility for combining observations of different time-steps
 - [ ] Make a plotting function for the distribution of correlation times (the bootstrap samples are in `bootstrapStatistics.samples`)

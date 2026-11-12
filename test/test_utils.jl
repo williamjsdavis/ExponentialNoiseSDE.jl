@@ -12,12 +12,15 @@ function test_utility_statistics()
         @test ExponentialNoiseSDE.true_runs([true,true,false,true]) == [1:2, 4:4]
         @test ExponentialNoiseSDE.true_runs([false,true,true,true,false,false]) == [2:4]
         @test ExponentialNoiseSDE.true_runs([false,false]) == UnitRange{Int}[]
+        # Finite differences on uneven points are exact for quadratics, ends included
+        x = [-1.0, -0.7, -0.2, 0.0, 0.1, 0.5, 1.2]
+        @test ExponentialNoiseSDE.fdiffNU(x, x.^2 .+ 3x) ≈ 2x .+ 3 atol=1E-13
     end
     @testset "Autocorrelation increments" begin
         # Minus half the mean squared increment at each time shift, over all pairs
         X = randn(StableRNG(2), 50)
         lags = [1, 3, 7, 20]
-        settings = ConditionalMomentSettings(lags, 5, (-1.0,1.0), Epanechnikov(), 0.5)
+        settings = ConditionalMomentSettings(lags, range(-1.0, 1.0, length=5), Epanechnikov(), 0.5)
         dA = build_moments(Observation(X, 1.0), settings).dA
         @test dA ≈ [-sum(abs2, X[1+ν:end] .- X[1:end-ν])/(2*(length(X) - ν)) for ν in lags] rtol=1E-12
 
@@ -46,7 +49,7 @@ function test_kernels()
         # The kernel in the settings is used
         X = DelimitedFiles.readdlm(datafile("exampleData.txt"))[1:5000]
         obs = Observation(X, 0.0050)
-        settings(kernel) = ConditionalMomentSettings(collect(1:6), 5, (-0.5,0.5), kernel, 0.1)
+        settings(kernel) = ConditionalMomentSettings(collect(1:6), range(-0.5, 0.5, length=5), kernel, 0.1)
         epanMoments = build_moments(obs, settings(Epanechnikov()))
         boxMoments = build_moments(obs, settings(BoxKernel()))
         @test epanMoments.moment1 != boxMoments.moment1
@@ -62,7 +65,7 @@ end
 # Test validation of the time shift lags
 function test_time_shift_validation()
     @testset "Time shift validation" begin
-        settings(lags) = ConditionalMomentSettings(lags, 5, (-1.0,1.0), Epanechnikov(), 0.1)
+        settings(lags) = ConditionalMomentSettings(lags, range(-1.0, 1.0, length=5), Epanechnikov(), 0.1)
         @test settings(collect(1:4)).timeShiftSamplePoints == 1:4
         @test settings(2:2:30).timeShiftSamplePoints == 2:2:30
         @test_throws ArgumentError settings(collect(15:-1:1)) # Not increasing
@@ -90,7 +93,7 @@ function small_data_test()
     ## Conditional moment settings
     nTimeShiftSamplePoints = 6
     nEvalPoints = 5
-    xEvalLims = (-0.1,0.1)
+    evalPoints = range(-0.1, 0.1, length=nEvalPoints)
     kernel = Epanechnikov()
     bandwidth = 0.01
 
@@ -100,8 +103,7 @@ function small_data_test()
 
     momentSettings = ConditionalMomentSettings(
         timeShiftSamplePoints,
-        nEvalPoints,
-        xEvalLims,
+        evalPoints,
         kernel,
         bandwidth,
     )
@@ -192,7 +194,7 @@ function small_data_test()
         # used to crash the estimation. The wider bandwidth keeps data under
         # every evaluation point in every resample.
         wideMomentSettings = ConditionalMomentSettings(
-            timeShiftSamplePoints, nEvalPoints, xEvalLims, kernel, 0.05)
+            timeShiftSamplePoints, evalPoints, kernel, 0.05)
         wideModelEstimate = estimate_model(build_moments(obs, wideMomentSettings), modelSettings1)
         nCompleted = quietly() do
             count(1:100) do seed
@@ -220,7 +222,7 @@ function test_points_without_data()
         X = readdlm(datafile("exampleData.txt"))[:]
         obs = Observation(X, 0.0050)
         settings(nEvalPoints, evalLims) = ConditionalMomentSettings(
-            collect(1:15), nEvalPoints, evalLims, Epanechnikov(), 0.1)
+            collect(1:15), range(evalLims..., length=nEvalPoints), Epanechnikov(), 0.1)
 
         # Limits wider than the data (-1.55 to 3.41)
         conditionalMoments = @test_logs (:warn, r"No data within the kernel support") build_moments(
@@ -257,8 +259,7 @@ end
 function get_default_estimation_settings()
     ## Conditional moment settings
     nTimeShiftSamplePoints = 15
-    nEvalPoints = 20
-    xEvalLims = (-1.0,1.0)
+    evalPoints = range(-1.0, 1.0, length=20)
     kernel = Epanechnikov()
     bandwidth = 0.1
     
@@ -267,8 +268,7 @@ function get_default_estimation_settings()
     
     momentSettings = ConditionalMomentSettings(
         timeShiftSamplePoints,
-        nEvalPoints,
-        xEvalLims,
+        evalPoints,
         kernel,
         bandwidth,
     )
@@ -332,7 +332,7 @@ function test_function_iteration()
     @testset "Drift and noise iteration" begin
         X = readdlm(datafile("exampleData.txt"))[:]
         conditionalMoments = build_moments(Observation(X, 0.0050),
-            ConditionalMomentSettings(collect(1:15), 20, (-1.0,1.0), Epanechnikov(), 0.1))
+            ConditionalMomentSettings(collect(1:15), range(-1.0, 1.0, length=20), Epanechnikov(), 0.1))
         fit(method) = estimate_model(conditionalMoments, ModelEstimateSettings(functionIterateMethod=method))
 
         # FiniteDiff is the unsmoothed case of SmoothedFiniteDiff
@@ -382,7 +382,7 @@ function test_bootstrap_statistics()
         # A model estimate, for the original estimates
         X = readdlm(datafile("exampleData.txt"))[1:5000]
         modelEstimate = estimate_model(Observation(X, 0.0050),
-            ConditionalMomentSettings(collect(1:6), 3, (-0.2,0.2), Epanechnikov(), 0.1),
+            ConditionalMomentSettings(collect(1:6), range(-0.2, 0.2, length=3), Epanechnikov(), 0.1),
             ModelEstimateSettings())
 
         # Skewed samples, with mean 2.2 and median 0
@@ -430,7 +430,7 @@ function test_bootstrap_resampling()
         # the pairs of the series, weighted by how often each window was drawn:
         # no pair is made from two points that are not a pair of the series
         X = readdlm(datafile("exampleData.txt"))[1:3000]
-        settings = ConditionalMomentSettings(collect(1:15), 20, (-1.0,1.0), Epanechnikov(), 0.1)
+        settings = ConditionalMomentSettings(collect(1:15), range(-1.0, 1.0, length=20), Epanechnikov(), 0.1)
         nWindows = length(X) - 15
         windows = E.block_bootstrap_windows(StableRNG(4), nWindows, 100)
         resampled = E.MomentSums(settings)
@@ -479,7 +479,7 @@ function test_bootstrap_resampling()
         # Warnings from the resample fits are reported once per kind, with a count
         X = readdlm(datafile("exampleData.txt"))[1:1000]
         modelEstimate = estimate_model(Observation(X, 0.0050),
-            ConditionalMomentSettings(collect(1:6), 5, (-0.1,0.1), Epanechnikov(), 0.05),
+            ConditionalMomentSettings(collect(1:6), range(-0.1, 0.1, length=5), Epanechnikov(), 0.05),
             ModelEstimateSettings())
         logs, _ = Test.collect_test_logs() do
             estimate_bootstrap_statistics(modelEstimate, BootstrapSettings(blockLength=100, nSamples=100);
@@ -502,11 +502,12 @@ function test_input_validation()
         @test_throws ArgumentError Observation(X, Inf)
         @test_throws ArgumentError Observation([X; NaN], 0.0050)
 
-        settings(; lags=collect(1:15), n=20, lims=(-1.0,1.0), h=0.1) =
-            ConditionalMomentSettings(lags, n, lims, Epanechnikov(), h)
-        @test_throws ArgumentError settings(n=2)
-        @test_throws ArgumentError settings(lims=(1.0,-1.0))
-        @test_throws ArgumentError settings(lims=(-Inf,1.0))
+        settings(; lags=collect(1:15), points=range(-1.0, 1.0, length=20), h=0.1) =
+            ConditionalMomentSettings(lags, points, Epanechnikov(), h)
+        @test_throws ArgumentError settings(points=[-1.0, 1.0]) # Too few
+        @test_throws ArgumentError settings(points=[1.0, 0.0, -1.0]) # Decreasing
+        @test_throws ArgumentError settings(points=[-1.0, 0.0, 0.0, 1.0]) # Repeated
+        @test_throws ArgumentError settings(points=[-Inf, 0.0, 1.0])
         @test_throws ArgumentError settings(h=0.0)
         @test_throws ArgumentError settings(h=-0.1)
         @test_throws ArgumentError build_moments(Observation(X[1:10], 0.0050), settings())
@@ -533,7 +534,7 @@ function test_settings_strategies()
     @testset "Settings and strategies" begin
         X = readdlm(datafile("exampleData.txt"))[:]
         momentSettings = ConditionalMomentSettings(
-            timeShiftSamplePoints=1:15, nEvalPoints=20, evalLims=(-1.0,1.0), bandwidth=0.1)
+            timeShiftSamplePoints=1:15, evalPoints=range(-1.0, 1.0, length=20), bandwidth=0.1)
         @test momentSettings.kernel == Epanechnikov()
         conditionalMoments = build_moments(Observation(X, 0.0050), momentSettings)
 
@@ -567,7 +568,7 @@ function test_api()
         X = readdlm(datafile("exampleData.txt"))[:]
         observation = Observation(X, 0.0050)
         conditionalMoments = build_moments(observation, ConditionalMomentSettings(
-            timeShiftSamplePoints=1:15, nEvalPoints=20, evalLims=(-1.0,1.0), bandwidth=0.1))
+            timeShiftSamplePoints=1:15, evalPoints=range(-1.0, 1.0, length=20), bandwidth=0.1))
         modelEstimate = estimate_model(conditionalMoments, ModelEstimateSettings())
         bootstrapStatistics = estimate_bootstrap_statistics(modelEstimate, BootstrapSettings(nSamples=3);
             rng=StableRNG(BOOTSTRAP_SEED))
@@ -594,10 +595,12 @@ end
 function test_moments_reference()
     @testset "Moments match the naive implementation" begin
         X = readdlm(datafile("exampleData.txt"))[1:10000]
-        for lags in (collect(1:15), [1,3,7,20]), lims in ((-1.0,1.0), (-3.0,3.0)),
+        # Evenly spaced points, some beyond the data, and uneven points at quantiles
+        pointSets = (range(-1.0, 1.0, length=20), range(-3.0, 3.0, length=20),
+            quantile(X, range(0.01, 0.99, length=20)))
+        for lags in (collect(1:15), [1,3,7,20]), x in pointSets,
                 bandwidth in (0.01, 0.1), kernel in (Epanechnikov(), BoxKernel())
-            x = range(lims[1], lims[2], length=20)
-            settings = ConditionalMomentSettings(lags, 20, lims, kernel, bandwidth)
+            settings = ConditionalMomentSettings(lags, x, kernel, bandwidth)
             conditionalMoments = quietly(() -> build_moments(Observation(X, 0.0050), settings))
             moment1, moment2 = conditionalMoments.moment1, conditionalMoments.moment2
             reference1, reference2 = reference_kbr_moments(X, lags, x, bandwidth, kernel)
@@ -613,7 +616,7 @@ function test_multiple_observations()
     @testset "Several observations" begin
         X = readdlm(datafile("exampleData.txt"))[1:20000]
         lags = collect(1:15)
-        settings = ConditionalMomentSettings(lags, 20, (-1.0,1.0), Epanechnikov(), 0.1)
+        settings = ConditionalMomentSettings(lags, range(-1.0, 1.0, length=20), Epanechnikov(), 0.1)
         x = range(-1.0, 1.0, length=20)
         single = build_moments(Observation(X, 0.0050), settings)
 

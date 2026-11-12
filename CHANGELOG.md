@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Breaking changes
+
+- `ConditionalMomentSettings` takes the evaluation points, `evalPoints`, instead of `nEvalPoints` and `evalLims`; any strictly increasing points can be used. For the previous evenly spaced grid, replace `nEvalPoints = 20, evalLims = (-1.0, 1.0)` with `evalPoints = range(-1.0, 1.0, length = 20)` (#43).
+- `ConditionalMoments.observation` is now `observations`, a vector (#41).
+- `BootstrapSettings.blockLength` counts windows of the series rather than samples (#38).
+
 ### Fixed
 
 - The autocorrelation increments, to which θ is fitted, came from the sample autocorrelation, which divides the n − ν products at lag ν by n. This biased θ low for short series (−13% at 2 000 samples, −7% at 5 000). They are now minus half the mean squared increment, which is unbiased, and are computed in the same pass as the moments. θ on the example data changes by +0.2% (#36).
@@ -10,7 +16,6 @@
 ### Changed
 
 - FFTW is no longer a dependency (#36).
-- `ConditionalMoments.observation` is now `observations`, a vector (#41).
 
 ### Performance
 
@@ -18,6 +23,7 @@
 
 ### Added
 
+- Uneven evaluation points, e.g. at quantiles of the data (#43).
 - Several observations of the same process, with the same time step, can be combined: `build_moments` and `estimate_model` accept a vector of `Observation`s, pool the increments within each, and the bootstrap draws from the windows of all of them. Concatenating series instead biased θ low (−26% for 50 series of 1 000 samples) (#41).
 - A benchmark script, `benchmark/scaling.jl`, that times the estimation against the series length and writes the figure in the README (#34).
 

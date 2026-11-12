@@ -3,36 +3,36 @@
 # MATLAB equivalent: MomentOptionsClass.m
 #TODO: Add optimal bandwidth selection
 """
-    ConditionalMomentSettings(; timeShiftSamplePoints, nEvalPoints, evalLims, bandwidth, kernel=Epanechnikov())
-    ConditionalMomentSettings(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
+    ConditionalMomentSettings(; timeShiftSamplePoints, evalPoints, bandwidth, kernel=Epanechnikov())
+    ConditionalMomentSettings(timeShiftSamplePoints, evalPoints, kernel, bandwidth)
 
 Settings for estimating conditional moments of the increments `X(t+τ) - X(t)`.
 
 - `timeShiftSamplePoints`: lags τ/dt in samples; at least 4, positive and
   strictly increasing (e.g. `1:15`)
-- `nEvalPoints`: number of evaluation points x (at least 3), evenly spaced over
-- `evalLims`: `(xmin, xmax)`, with `xmin < xmax`
+- `evalPoints`: evaluation points x; at least 3, finite and strictly
+  increasing, e.g. evenly spaced, `range(-1, 1, length = 20)`, or at
+  quantiles of the data
 - `bandwidth`: kernel bandwidth h, in units of x
 - `kernel`: a `Kernel`, scaled by the bandwidth
 """
 Base.@kwdef struct ConditionalMomentSettings
     timeShiftSamplePoints::Array{Int64,1}
-    nEvalPoints::Int64
-    evalLims::Tuple{Float64,Float64}
+    evalPoints::Array{Float64,1}
     kernel::Kernel = Epanechnikov()
     bandwidth::Float64
-    function ConditionalMomentSettings(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
+    function ConditionalMomentSettings(timeShiftSamplePoints, evalPoints, kernel, bandwidth)
         check_time_shifts(timeShiftSamplePoints)
         # Finite differences in the drift and noise solution need 3 points
-        nEvalPoints >= 3 || throw(ArgumentError(
-            "at least 3 evaluation points are needed, got $nEvalPoints"))
-        (all(isfinite, evalLims) && evalLims[1] < evalLims[2]) || throw(ArgumentError(
-            "evalLims must be finite and increasing, got $evalLims"))
+        length(evalPoints) >= 3 || throw(ArgumentError(
+            "at least 3 evaluation points are needed, got $(length(evalPoints))"))
+        (all(isfinite, evalPoints) && all(>(0), diff(evalPoints))) || throw(ArgumentError(
+            "evaluation points must be finite and strictly increasing, got $(evalPoints)"))
         kernel isa Kernel || throw(ArgumentError(
             "kernel must be a Kernel instance such as Epanechnikov(), got $(repr(kernel))"))
         (bandwidth > 0 && isfinite(bandwidth)) || throw(ArgumentError(
             "bandwidth must be positive and finite, got $bandwidth"))
-        return new(timeShiftSamplePoints, nEvalPoints, evalLims, kernel, bandwidth)
+        return new(timeShiftSamplePoints, evalPoints, kernel, bandwidth)
     end
 end
 
@@ -127,7 +127,7 @@ end
 
 # Conditional moments from sums over pairs of the observations
 function conditional_moments(sums, observations, momentSettings::ConditionalMomentSettings)
-    xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints) |> collect
+    xEvalPoints = copy(momentSettings.evalPoints)
     moment1, moment2, dA = moments(sums)
     noData = [all(isnan, view(moment1, :, j)) for j in eachindex(xEvalPoints)]
     if any(noData)

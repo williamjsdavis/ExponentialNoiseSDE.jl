@@ -3,12 +3,11 @@
 # Run the full pipeline with the settings used throughout the scientific tests
 function fit_model(X, dt;
         lags = 1:15,
-        nEvalPoints = 20,
-        evalLims = (-1.0, 1.0),
+        evalPoints = range(-1.0, 1.0, length=20),
         bandwidth = 0.1,
         method = SmoothedFiniteDiff())
     momentSettings = ConditionalMomentSettings(
-        collect(lags), nEvalPoints, evalLims, Epanechnikov(), bandwidth)
+        collect(lags), evalPoints, Epanechnikov(), bandwidth)
     fitSettings = ModelEstimateSettings(functionIterateMethod = method)
     return estimate_model(Observation(X, dt), momentSettings, fitSettings)
 end
@@ -25,10 +24,10 @@ function time_rescaled(X, dt, method; c = 1000.0)
     return correlation_time(m)/c, drift(m) .* c, noise(m) .* sqrt(c)
 end
 
-# Estimates from data transformed x → a*x + b, mapped back to the original
-# scale: θ is unchanged, f and g scale by a
-function space_rescaled(X, dt, method; a = 10.0, b = 0.5)
-    m = fit_model(a .* X .+ b, dt; method, evalLims = (b - a, b + a), bandwidth = 0.1*a)
+# Estimates from data transformed x → a*x + b, at the points transformed the
+# same way, mapped back to the original scale: θ is unchanged, f and g scale by a
+function space_rescaled(X, dt, method; a = 10.0, b = 0.5, points = range(-1.0, 1.0, length=20))
+    m = fit_model(a .* X .+ b, dt; method, evalPoints = a .* points .+ b, bandwidth = 0.1*a)
     return correlation_time(m), drift(m) ./ a, noise(m) ./ a
 end
 

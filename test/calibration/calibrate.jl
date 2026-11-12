@@ -76,7 +76,7 @@ println("Spread ratio std(θ̂ | 16N)/std(θ̂ | N), 10 groups of 8 seeds: ", ro
 pooledErr = Float64[]
 for s in 1:nSeeds
     observations = [Observation(simulate_process(StableRNG(1000s + k), fLin, gLin, θTRUE, DT, 1000), DT) for k in 1:50]
-    momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), Epanechnikov(), 0.1)
+    momentSettings = ConditionalMomentSettings(collect(1:15), range(-1.0, 1.0, length=20), Epanechnikov(), 0.1)
     m = estimate_model(observations, momentSettings, ModelEstimateSettings())
     push!(pooledErr, abs(correlation_time(m) - θTRUE)/θTRUE)
 end

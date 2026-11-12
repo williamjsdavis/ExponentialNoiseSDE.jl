@@ -56,8 +56,7 @@ observation = Observation(X, 0.005)
 
 momentSettings = ConditionalMomentSettings(
     timeShiftSamplePoints = 1:15,
-    nEvalPoints = 20,
-    evalLims = (-1.0, 1.0),
+    evalPoints = range(-1.0, 1.0, length = 20),
     bandwidth = 0.1,
 )
 modelEstimate = estimate_model(observation, momentSettings, ModelEstimateSettings())
@@ -88,6 +87,10 @@ The resampled estimates are in `bootstrapStatistics.samples`.
 
 ## Options
 
+- **Evaluation points:** any strictly increasing points, e.g. evenly spaced,
+  `evalPoints = range(-1.0, 1.0, length = 20)`, or at quantiles of the data,
+  `evalPoints = quantile(X, range(0.02, 0.98, length = 20))`, which puts
+  every point where there are data.
 - **Several series:** pass a vector of observations with the same time step,
   e.g. `estimate_model([Observation(X1, dt), Observation(X2, dt)], momentSettings, fitSettings)`.
   The increments within each series are pooled, no increment pairs two series,
