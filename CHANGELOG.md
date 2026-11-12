@@ -5,6 +5,7 @@
 ### Fixed
 
 - The autocorrelation increments, to which θ is fitted, came from the sample autocorrelation, which divides the n − ν products at lag ν by n. This biased θ low for short series (−13% at 2 000 samples, −7% at 5 000). They are now minus half the mean squared increment, which is unbiased, and are computed in the same pass as the moments. θ on the example data changes by +0.2% (#36).
+- The bootstrap joined blocks of the series end to end, so increments across the joins paired unrelated points. They acted like extra white noise: the resampled θ was 48% low at the default `blockLength = 500` (84% at 100), and the drift and noise summaries were biased too. Resamples are now made of blocks of the windows the estimate uses (Künsch, 1989), so every increment in a resample is an increment of the series. `blockLength` now counts windows, and must be less than the number of windows, the series length less the largest time shift (#38).
 
 ### Changed
 

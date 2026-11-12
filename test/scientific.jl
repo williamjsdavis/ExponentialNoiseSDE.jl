@@ -60,6 +60,23 @@ function scientific_tests()
         @test noise(refit) == noise(model)
     end
 
+    @testset "Bootstrap" begin
+        # Resamples of windows are centred on the estimate (joining blocks of the
+        # series made them 84% low at blockLength = 100 and 48% low at 500), and
+        # spread about as much as θ̂ does across simulated series, whose robust
+        # spread is 0.00051 at this length
+        θMAD = 0.00051
+        for (blockLength, bounds) in ((100, (0.26, 8.8)), (500, (0.22, 6.6)))
+            bootstrapStatistics = quietly() do
+                estimate_bootstrap_statistics(model, BootstrapSettings(; blockLength);
+                    rng=StableRNG(BOOTSTRAP_SEED))
+            end
+            θs = bootstrapStatistics.samples.correlationEstimate
+            @test abs(mean(θs)/correlation_time(model) - 1) < 0.1
+            @test bounds[1] < mad(θs)/θMAD < bounds[2]
+        end
+    end
+
     @testset "White noise" begin
         # θ = 0: the estimate should be at or near zero (θ̂/dt ≤ 0.04 over 100
         # seeds; 40% are exactly 0, which used to crash the estimation)

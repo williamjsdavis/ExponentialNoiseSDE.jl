@@ -37,7 +37,10 @@ Following Lehle & Peinke (2018):
    expands the moments in basis functions ``r_k(\tau, \theta)`` by least
    squares, and solves for ``f`` and ``g`` by fixed-point iteration.
 3. [`estimate_bootstrap_statistics`](@ref) repeats the estimate on circular
-   block bootstrap resamples of the series.
+   block bootstrap resamples. The estimate uses the series only through its
+   windows ``(X(t), \ldots, X(t + \tau_\mathrm{max}))``, so a resample is made
+   of blocks of consecutive windows (Künsch, 1989): every increment in a
+   resample is an increment of the series.
 
 ## Quick start
 
@@ -95,14 +98,12 @@ The resampled estimates are in `bootstrapStatistics.samples`.
 
 ## Known limitations
 
-- **Bootstrap block joins.** Resamples join blocks of the series end to end,
-  so increments that span a join are not increments of the original process.
-  They act like extra white noise and bias the resampled estimates. The
-  resampled ``\theta`` is lower than the estimate from the full series,
-  increasingly so for short blocks (about −50% at `blockLength = 500` on the
-  example data). With `biasCorrection = true` the 95% intervals are shifted to
-  centre on the original estimate, but their width and the reported means and
-  medians still include this effect.
+- **Bootstrap intervals are somewhat narrow.** Over series simulated from the
+  example model, with the default settings, the resampled ``\theta`` are
+  centred on the estimate but typically spread about 20% less than
+  ``\hat\theta`` does across independent series. The 95% intervals for
+  ``\theta`` cover the true value in about 83% of cases (about 88% with 100
+  resamples). See `test/calibration/calibrate.jl`.
 - **Evaluation points without data.** Where no sample lies within the kernel
   support of an evaluation point, the moments, drift and noise are NaN (with a
   warning); the other points are unaffected.

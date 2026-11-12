@@ -415,13 +415,41 @@ end
 # Test the block bootstrap resampling
 function test_bootstrap_resampling()
     @testset "Bootstrap resampling" begin
-        # Circular blocks of consecutive indices, cut to the series length
-        indices = ExponentialNoiseSDE.block_bootstrap_indices(StableRNG(3), 10, 4)
-        @test length(indices) == 10
-        @test all(in(1:10), indices)
-        for blockStart in (1, 5, 9), k in 1:min(3, 10 - blockStart)
-            @test indices[blockStart + k] == mod(indices[blockStart] + k - 1, 10) + 1
+        # Circular blocks of consecutive windows, as many windows as the series
+        E = ExponentialNoiseSDE
+        for seed in 1:20
+            windows = E.block_bootstrap_windows(StableRNG(seed), 10, 4)
+            @test sum(length, windows) == 10
+            @test all(w -> !isempty(w) && issubset(w, 1:10) && length(w) <= 4, windows)
+            # A block that wraps from the last window to the first is two ranges
+            @test all(i -> last(windows[i]) == 10 || length(windows[i]) == 4 ||
+                i == length(windows) || first(windows[i]) == 1, eachindex(windows))
         end
+
+        # A resample adds the pairs of its windows, so its sums are the sums over
+        # the pairs of the series, weighted by how often each window was drawn:
+        # no pair is made from two points that are not a pair of the series
+        X = readdlm(datafile("exampleData.txt"))[1:3000]
+        settings = ConditionalMomentSettings(collect(1:15), 20, (-1.0,1.0), Epanechnikov(), 0.1)
+        nWindows = length(X) - 15
+        windows = E.block_bootstrap_windows(StableRNG(4), nWindows, 100)
+        resampled = E.MomentSums(settings)
+        for w in windows
+            E.add_pairs!(resampled, X, w, settings)
+        end
+        counts = zeros(Int, nWindows)
+        for w in windows, t in w
+            counts[t] += 1
+        end
+        x = range(-1.0, 1.0, length=20)
+        K(t, j) = Epanechnikov()((x[j] - X[t])/0.1)/0.1
+        weighted(f) = [sum(counts[t]*f(t, ν, j) for t in 1:nWindows) for ν in 1:15, j in 1:20]
+        @test resampled.weight ≈ weighted((t, ν, j) -> K(t, j))
+        @test resampled.increment ≈ weighted((t, ν, j) -> K(t, j)*(X[t+ν] - X[t]))
+        @test resampled.squaredIncrement ≈ weighted((t, ν, j) -> K(t, j)*(X[t+ν] - X[t])^2)
+        @test resampled.unweightedSquaredIncrement ≈
+            [sum(counts[t]*(X[t+ν] - X[t])^2 for t in 1:nWindows) for ν in 1:15]
+        @test resampled.pairCount == fill(nWindows, 15)
 
         # Warnings from the resample fits are reported once per kind, with a count
         X = readdlm(datafile("exampleData.txt"))[1:1000]
@@ -463,8 +491,12 @@ function test_input_validation()
         modelEstimate = quietly() do
             estimate_model(Observation(X, 0.0050), settings(), ModelEstimateSettings())
         end
+        # Blocks are of windows: 2000 samples with time shifts up to 15 have 1985
         @test_throws ArgumentError estimate_bootstrap_statistics(modelEstimate,
-            BootstrapSettings(blockLength=2000))
+            BootstrapSettings(blockLength=1985))
+        @test quietly(() -> estimate_bootstrap_statistics(modelEstimate,
+            BootstrapSettings(blockLength=1984, nSamples=2); rng=StableRNG(BOOTSTRAP_SEED))) isa
+            ExponentialNoiseSDE.BootstrapStatistics
 
         @test_throws ArgumentError FixedTheta(-0.01)
         @test_throws ArgumentError FixedTheta(Inf)
