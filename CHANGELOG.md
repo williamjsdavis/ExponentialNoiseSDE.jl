@@ -10,6 +10,7 @@
 ### Changed
 
 - FFTW is no longer a dependency (#36).
+- `ConditionalMoments.observation` is now `observations`, a vector (#41).
 
 ### Performance
 
@@ -17,6 +18,7 @@
 
 ### Added
 
+- Several observations of the same process, with the same time step, can be combined: `build_moments` and `estimate_model` accept a vector of `Observation`s, pool the increments within each, and the bootstrap draws from the windows of all of them. Concatenating series instead biased θ low (−26% for 50 series of 1 000 samples) (#41).
 - A benchmark script, `benchmark/scaling.jl`, that times the estimation against the series length and writes the figure in the README (#34).
 
 ## v0.2.0

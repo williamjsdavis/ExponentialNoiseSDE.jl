@@ -51,22 +51,23 @@ where ν is the largest time shift, so resamples are made of windows (Künsch,
 1989): blocks of consecutive windows are drawn at random, wrapping from the
 last window to the first, until there are as many windows as in the series.
 Every pair `(X[t], X[t+τ])` in a resample is a pair of the series, so no
-increment spans two blocks.
+increment spans two blocks. With several observations, their windows are
+numbered one after the other, and blocks are drawn from all of them.
 """
 function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSettings::BootstrapSettings;
         rng::AbstractRNG = default_rng())
     # A block of all the windows only rotates them, which underestimates the
     # uncertainty
-    observation = modelEstimate.conditionalMoments.observation
+    observations = modelEstimate.conditionalMoments.observations
     momentSettings = modelEstimate.conditionalMoments.momentSettings
-    nWindows = n_windows(observation, momentSettings)
+    nWindows = sum(observation -> n_windows(observation, momentSettings), observations)
     bootstrapSettings.blockLength < nWindows || throw(ArgumentError(
         "blockLength ($(bootstrapSettings.blockLength)) must be less than the number of windows " *
-        "of the series ($nWindows: $(length(observation)) samples less the largest time shift)"))
+        "($nWindows: the number of samples less the largest time shift, summed over the observations)"))
 
     @debug "Starting correlated process regression and bootstrap iterations" bootstrapSettings
     samples = bootstrap_samples(
-        observation,
+        observations,
         momentSettings,
         modelEstimate.fitSettings,
         bootstrapSettings,
@@ -80,17 +81,31 @@ end
 n_windows(observation, momentSettings) =
     length(observation) - maximum(momentSettings.timeShiftSamplePoints)
 
+# Add the pairs of windows in a range of the windows of all the observations,
+# numbered one observation after the other
+function add_windows!(sums, observations, windows, momentSettings)
+    offset = 0
+    for observation in observations
+        nWindows = n_windows(observation, momentSettings)
+        # The part of the range in this observation, in its own numbering
+        starts = max(first(windows) - offset, 1):min(last(windows) - offset, nWindows)
+        isempty(starts) || add_pairs!(sums, observation.X, starts, momentSettings)
+        offset += nWindows
+    end
+    return sums
+end
+
 # Re-estimate the model, with the same settings, on block bootstrap resamples
-# of the windows of the observation. Warnings from the fits are reported once
+# of the windows of the observations. Warnings from the fits are reported once
 # per kind.
-function bootstrap_samples(observation, momentSettings, fitSettings, bootstrapSettings, rng)
+function bootstrap_samples(observations, momentSettings, fitSettings, bootstrapSettings, rng)
     nSamples = bootstrapSettings.nSamples
     nEvalPoints = momentSettings.nEvalPoints
     correlationEstimate = Vector{Float64}(undef, nSamples)
     driftEstimate = Matrix{Float64}(undef, nEvalPoints, nSamples)
     noiseEstimate = Matrix{Float64}(undef, nEvalPoints, nSamples)
     meanAbsoluteError = Vector{Float64}(undef, nSamples)
-    nWindows = n_windows(observation, momentSettings)
+    nWindows = sum(observation -> n_windows(observation, momentSettings), observations)
 
     # May be able to parallelize
     warningCounter = WarningCounter(current_logger())
@@ -100,10 +115,10 @@ function bootstrap_samples(observation, momentSettings, fitSettings, bootstrapSe
             # The pairs of the resampled windows
             sums = MomentSums(momentSettings)
             for windows in block_bootstrap_windows(rng, nWindows, bootstrapSettings.blockLength)
-                add_pairs!(sums, observation.X, windows, momentSettings)
+                add_windows!(sums, observations, windows, momentSettings)
             end
             estimate = estimate_model(
-                conditional_moments(sums, observation, momentSettings),
+                conditional_moments(sums, observations, momentSettings),
                 fitSettings
             )
             correlationEstimate[i] = estimate.correlationEstimate

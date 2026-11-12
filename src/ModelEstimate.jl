@@ -75,9 +75,11 @@ eval_points(modelEstimate::ModelEstimate) = modelEstimate.conditionalMoments.xEv
 """
     estimate_model(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings) -> ModelEstimate
     estimate_model(observation::Observation, momentSettings, fitSettings) -> ModelEstimate
+    estimate_model(observations::AbstractVector{Observation}, momentSettings, fitSettings) -> ModelEstimate
 
 Estimate the correlation time θ, drift f and noise g from conditional moments
-(or directly from an observation, building the moments first).
+(or directly from one or several observations, building the moments first with
+[`build_moments`](@ref)).
 """
 function estimate_model(conditionalMoments::ConditionalMoments, fitSettings::ModelEstimateSettings)
     # Estimate correlation time (theta)

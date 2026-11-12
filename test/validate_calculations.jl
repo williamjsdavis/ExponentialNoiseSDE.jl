@@ -30,7 +30,7 @@ end
 
 with_matlab_dA(cm) = ExponentialNoiseSDE.ConditionalMoments(cm.moment1, cm.moment2,
     cm.xEvalPoints, cm.timeShifts, DelimitedFiles.readdlm(datafile("dAMATLAB.txt"))[:],
-    cm.observation, cm.momentSettings)
+    cm.observations, cm.momentSettings)
 
 # Test theta properties
 function validate_theta(modelEstimate)

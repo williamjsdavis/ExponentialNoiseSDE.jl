@@ -71,6 +71,17 @@ spread(n, seeds) = std([correlation_time(fit_model(simulate_process(StableRNG(s)
 ratios = [spread(160_000, (8k+1):(8k+8)) / spread(10_000, (8k+1):(8k+8)) for k in 0:9]
 println("Spread ratio std(θ̂ | 16N)/std(θ̂ | N), 10 groups of 8 seeds: ", round.(ratios, digits=3), "  (expect ≈ 0.25)")
 
+# Several short series: 50 independent series of 1000 samples, pooled. Series k
+# of repetition s uses seed 1000s + k.
+pooledErr = Float64[]
+for s in 1:nSeeds
+    observations = [Observation(simulate_process(StableRNG(1000s + k), fLin, gLin, θTRUE, DT, 1000), DT) for k in 1:50]
+    momentSettings = ConditionalMomentSettings(collect(1:15), 20, (-1.0, 1.0), Epanechnikov(), 0.1)
+    m = estimate_model(observations, momentSettings, ModelEstimateSettings())
+    push!(pooledErr, abs(correlation_time(m) - θTRUE)/θTRUE)
+end
+println("50 series of 1000 samples, pooled: θ relative error median $(round(median(pooledErr), sigdigits=3)), 99% $(round(q(pooledErr), sigdigits=3)) -> rtol $(round(1.5q(pooledErr), sigdigits=2)); seed 1: $(round(pooledErr[1], sigdigits=3))")
+
 # Bootstrap with the default number of resamples, on the recovery datasets:
 # centring of the resampled θ on the estimate, their spread relative to the
 # spread of θ̂ across datasets (robust: θ̂ has rare large outliers), and how

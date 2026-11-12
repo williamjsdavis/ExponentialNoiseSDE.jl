@@ -64,6 +64,7 @@ Kernel-regression estimates of the conditional moments of the increments
 - `dA`: autocorrelation increments A(τ_i) - A(0) at the time shifts, where A
   is the autocovariance of X, used to fit θ. They are estimated as minus half
   the mean squared increment, since A(τ) - A(0) = -E[ΔX²]/2.
+- `observations`: the observations the moments were estimated from
 
 Moments are NaN at evaluation points with no data within the kernel support.
 """
@@ -74,7 +75,7 @@ struct ConditionalMoments
     xEvalPoints::Array{Float64,1}
     timeShifts::Array{Float64,1} # Lags in units of time, one per moment row
     dA::Array{Float64,1} # Autocorrelation increments, one per time shift
-    observation::Observation
+    observations::Vector{Observation}
     momentSettings::ConditionalMomentSettings
 end
 
@@ -86,24 +87,46 @@ Base.show(io::IO, conditionalMoments::ConditionalMoments) = print(io,
 # MATLAB equivalent: buildMoments.m
 """
     build_moments(observation::Observation, momentSettings::ConditionalMomentSettings) -> ConditionalMoments
+    build_moments(observations::AbstractVector{Observation}, momentSettings) -> ConditionalMoments
 
 Estimate the conditional moments of the increments of `observation`, and its
 autocorrelation increments, at the lags and evaluation points in
 `momentSettings`. Warns if some evaluation points have no data within the
 kernel support.
-"""
-function build_moments(observation::Observation, momentSettings::ConditionalMomentSettings)
-    maximumLag = maximum(momentSettings.timeShiftSamplePoints)
-    length(observation) > maximumLag || throw(ArgumentError(
-        "the series has $(length(observation)) samples, too few for a time shift of $maximumLag"))
 
-    # All pairs in the series
-    sums = add_pairs!(MomentSums(momentSettings), observation.X, 1:length(observation)-1, momentSettings)
-    return conditional_moments(sums, observation, momentSettings)
+Several observations of the same process, with the same time step, are
+combined by pooling the increments within each of them; no increment pairs
+two observations. Each must be longer than the largest time shift.
+"""
+build_moments(observation::Observation, momentSettings::ConditionalMomentSettings) =
+    build_moments([observation], momentSettings)
+
+function build_moments(observations::AbstractVector{Observation}, momentSettings::ConditionalMomentSettings)
+    check_observations(observations, momentSettings)
+
+    # All pairs within each observation
+    sums = MomentSums(momentSettings)
+    for observation in observations
+        add_pairs!(sums, observation.X, 1:length(observation)-1, momentSettings)
+    end
+    return conditional_moments(sums, observations, momentSettings)
 end
 
-# Conditional moments from sums over pairs of the observation
-function conditional_moments(sums, observation::Observation, momentSettings::ConditionalMomentSettings)
+function check_observations(observations, momentSettings)
+    isempty(observations) && throw(ArgumentError("at least one observation is needed"))
+    dt = first(observations).dt
+    all(observation -> observation.dt ≈ dt, observations) || throw(ArgumentError(
+        "observations must have the same time step, got $(unique(observation.dt for observation in observations))"))
+    maximumLag = maximum(momentSettings.timeShiftSamplePoints)
+    for observation in observations
+        length(observation) > maximumLag || throw(ArgumentError(
+            "a series has $(length(observation)) samples, too few for a time shift of $maximumLag"))
+    end
+    return nothing
+end
+
+# Conditional moments from sums over pairs of the observations
+function conditional_moments(sums, observations, momentSettings::ConditionalMomentSettings)
     xEvalPoints = calculate_xEvalPoints(momentSettings.evalLims, momentSettings.nEvalPoints) |> collect
     moment1, moment2, dA = moments(sums)
     noData = [all(isnan, view(moment1, :, j)) for j in eachindex(xEvalPoints)]
@@ -112,14 +135,14 @@ function conditional_moments(sums, observation::Observation, momentSettings::Con
             "moments, drift and noise are NaN there" xEvalPoints = xEvalPoints[noData]
     end
 
-    timeShifts = momentSettings.timeShiftSamplePoints .* observation.dt
+    timeShifts = momentSettings.timeShiftSamplePoints .* first(observations).dt
     return ConditionalMoments(
         moment1,
         moment2,
         xEvalPoints,
         timeShifts,
         dA,
-        observation,
+        collect(observations),
         momentSettings
     )
 end

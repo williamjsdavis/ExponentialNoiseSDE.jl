@@ -61,7 +61,7 @@ Version 0.1.0 had a scaling comparable to the MATLAB package [`secn-PR`](https:/
 
 # TODOs
 
-- [ ] Add observations from multiple data sources
+- [x] Add observations from multiple data sources (with the same time step)
 - [x] Implement arbitrary `timeShiftSamplePoints` vector
 - [ ] Implement arbitrary spatial evaluation points
 - [x] Implement option of forcing a particular correlation time
