@@ -38,3 +38,7 @@ function matches(m, (θ, f, g); rtol = 1e-6)
         isapprox(f, drift(m); rtol) &&
         isapprox(g, noise(m); rtol)
 end
+
+# Robust spread: scaled median absolute deviation (the standard deviation for
+# normal data)
+mad(v) = 1.4826*median(abs.(v .- median(v)))

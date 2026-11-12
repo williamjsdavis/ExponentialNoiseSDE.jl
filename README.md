@@ -68,7 +68,7 @@ Version 0.1.0 had a scaling comparable to the MATLAB package [`secn-PR`](https:/
 - [ ] Add compatibility for combining observations of different time-steps
 - [ ] Make a plotting function for the distribution of correlation times (the bootstrap samples are in `bootstrapStatistics.samples`)
 - [ ] Add more kernel functions to the library
-- [ ] Remove the bias from joining blocks in the bootstrap
+- [x] Remove the bias from joining blocks in the bootstrap
 
 # Changelog
 

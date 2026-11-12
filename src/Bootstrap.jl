@@ -6,10 +6,12 @@
     BootstrapSettings(; blockLength=500, nSamples=20, biasCorrection=true)
 
 Settings for the circular block bootstrap: resamples are made of blocks of
-`blockLength` consecutive samples (shorter than the series), and the model is
-re-estimated on `nSamples ≥ 2` resamples. With `biasCorrection`, the 95%
-intervals are computed from the resampled estimates shifted so their mean is
-the original estimate.
+`blockLength` consecutive windows of the series (fewer than the number of
+windows; see [`estimate_bootstrap_statistics`](@ref)), and the model is
+re-estimated on `nSamples ≥ 2` resamples. Blocks should be long compared with
+the time over which X stays correlated, in samples. With `biasCorrection`, the
+95% intervals are computed from the resampled estimates shifted so their mean
+is the original estimate.
 """
 Base.@kwdef struct BootstrapSettings
     blockLength::Int64 = 500
@@ -44,21 +46,28 @@ summarize. The result holds summaries ([`correlation_time`](@ref),
 Pass an `rng` for reproducible results. Warnings from the resample fits are
 reported once per kind, with a count.
 
-Joining blocks creates increments that are not in the original series, which
-biases the resampled estimates (see the documentation's known limitations).
+The estimate uses the series only through its windows `(X[t], ..., X[t+ν])`,
+where ν is the largest time shift, so resamples are made of windows (Künsch,
+1989): blocks of consecutive windows are drawn at random, wrapping from the
+last window to the first, until there are as many windows as in the series.
+Every pair `(X[t], X[t+τ])` in a resample is a pair of the series, so no
+increment spans two blocks.
 """
 function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSettings::BootstrapSettings;
         rng::AbstractRNG = default_rng())
-    # A block as long as the series only rotates it, which underestimates
-    # the uncertainty
+    # A block of all the windows only rotates them, which underestimates the
+    # uncertainty
     observation = modelEstimate.conditionalMoments.observation
-    bootstrapSettings.blockLength < length(observation) || throw(ArgumentError(
-        "blockLength ($(bootstrapSettings.blockLength)) must be shorter than the series ($(length(observation)) samples)"))
+    momentSettings = modelEstimate.conditionalMoments.momentSettings
+    nWindows = n_windows(observation, momentSettings)
+    bootstrapSettings.blockLength < nWindows || throw(ArgumentError(
+        "blockLength ($(bootstrapSettings.blockLength)) must be less than the number of windows " *
+        "of the series ($nWindows: $(length(observation)) samples less the largest time shift)"))
 
     @debug "Starting correlated process regression and bootstrap iterations" bootstrapSettings
     samples = bootstrap_samples(
         observation,
-        modelEstimate.conditionalMoments.momentSettings,
+        momentSettings,
         modelEstimate.fitSettings,
         bootstrapSettings,
         rng
@@ -66,8 +75,14 @@ function estimate_bootstrap_statistics(modelEstimate::ModelEstimate,bootstrapSet
     return summarize_bootstrap(modelEstimate, samples, bootstrapSettings)
 end
 
+# Windows (X[t], ..., X[t+ν]) of the series, for t = 1, ..., n - ν, where ν is
+# the largest time shift
+n_windows(observation, momentSettings) =
+    length(observation) - maximum(momentSettings.timeShiftSamplePoints)
+
 # Re-estimate the model, with the same settings, on block bootstrap resamples
-# of the observation. Warnings from the fits are reported once per kind.
+# of the windows of the observation. Warnings from the fits are reported once
+# per kind.
 function bootstrap_samples(observation, momentSettings, fitSettings, bootstrapSettings, rng)
     nSamples = bootstrapSettings.nSamples
     nEvalPoints = momentSettings.nEvalPoints
@@ -75,16 +90,20 @@ function bootstrap_samples(observation, momentSettings, fitSettings, bootstrapSe
     driftEstimate = Matrix{Float64}(undef, nEvalPoints, nSamples)
     noiseEstimate = Matrix{Float64}(undef, nEvalPoints, nSamples)
     meanAbsoluteError = Vector{Float64}(undef, nSamples)
+    nWindows = n_windows(observation, momentSettings)
 
     # May be able to parallelize
     warningCounter = WarningCounter(current_logger())
     with_logger(warningCounter) do
         for i in 1:nSamples
             @debug "Bootstrap sample $i of $nSamples"
-            indices = block_bootstrap_indices(rng, length(observation), bootstrapSettings.blockLength)
+            # The pairs of the resampled windows
+            sums = MomentSums(momentSettings)
+            for windows in block_bootstrap_windows(rng, nWindows, bootstrapSettings.blockLength)
+                add_pairs!(sums, observation.X, windows, momentSettings)
+            end
             estimate = estimate_model(
-                Observation(observation.X[indices], observation.dt),
-                momentSettings,
+                conditional_moments(sums, observation, momentSettings),
                 fitSettings
             )
             correlationEstimate[i] = estimate.correlationEstimate
@@ -100,14 +119,23 @@ function bootstrap_samples(observation, momentSettings, fitSettings, bootstrapSe
     return BootstrapSamples(correlationEstimate, driftEstimate, noiseEstimate, meanAbsoluteError)
 end
 
-# Indices of a circular block bootstrap resample of 1:N: blocks of blockLength
-# consecutive indices from random starts, wrapping from N back to 1, joined and
-# cut to length N
-#NOTE: The joins between blocks create increments that are not in the series
-function block_bootstrap_indices(rng, N, blockLength)
+# Windows of a circular block bootstrap resample of 1:N, as ranges: blocks of
+# blockLength consecutive windows from random starts, the last cut so there are
+# N in all. A block that wraps from N back to 1 is two ranges.
+function block_bootstrap_windows(rng, N, blockLength)
     blockStarts = rand(rng, 1:N, ceil(Int, N/blockLength))
-    indices = [mod(start + k - 1, N) + 1 for start in blockStarts for k in 0:blockLength-1]
-    return indices[1:N]
+    windows = UnitRange{Int}[]
+    remaining = N
+    for start in blockStarts
+        stop = start + min(blockLength, remaining) - 1
+        remaining -= stop - start + 1
+        if stop <= N
+            push!(windows, start:stop)
+        else
+            push!(windows, start:N, 1:stop-N)
+        end
+    end
+    return windows
 end
 
 # Logger that counts warnings by the statement that logged them, so warnings
