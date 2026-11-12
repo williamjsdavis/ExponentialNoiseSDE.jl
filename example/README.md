@@ -55,7 +55,8 @@ lower, upper = drift(bootstrapStatistics).lower95, drift(bootstrapStatistics).up
 ![Drift and noise with 95% intervals](bootstrap.svg)
 
 Each resample is made of blocks of consecutive windows of the series, so the
-resampled estimates are centred on the best estimate. The intervals are
-somewhat narrow: over series simulated from this model, 95% intervals for θ
-cover the true value in about 83% of cases with the default settings, and
-about 88% with 100 resamples (see "Known limitations" in the documentation).
+resampled estimates are centred on the best estimate. Over series simulated
+from this model, 95% intervals for θ contain the true value 93% of the time
+with the default block length of 500, and 95% with blocks of 100, about the
+time over which X stays correlated (see "Known limitations" in the
+documentation).

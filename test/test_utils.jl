@@ -162,7 +162,7 @@ function small_data_test()
         @test bootstrapSettings1.blockLength == 100
         @test bootstrapSettings1.nSamples == 7
         @test bootstrapSettings2.blockLength == 500
-        @test bootstrapSettings2.nSamples == 20
+        @test bootstrapSettings2.nSamples == 100
         @test bootstrapSettings2.biasCorrection
     end
 
